@@ -9,7 +9,7 @@ import type { Metadata } from "next";
 
 type Props = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ qty?: string }>;
+  searchParams: Promise<{ qty?: string; ticketType?: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CheckoutPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { qty } = await searchParams;
+  const { qty, ticketType } = await searchParams;
 
   if (isMockCatalog()) {
     return (
@@ -33,7 +33,11 @@ export default async function CheckoutPage({ params, searchParams }: Props) {
 
   const session = await auth();
   if (!session?.user?.id) {
-    redirect(`/auth/signin?callbackUrl=${encodeURIComponent(`/events/${slug}/checkout?qty=${qty ?? "1"}`)}`);
+    const callback = new URLSearchParams({
+      qty: qty ?? "1",
+      ...(ticketType ? { ticketType } : {}),
+    });
+    redirect(`/auth/signin?callbackUrl=${encodeURIComponent(`/events/${slug}/checkout?${callback.toString()}`)}`);
   }
 
   const event = await getEventBySlug(slug);
@@ -44,6 +48,23 @@ export default async function CheckoutPage({ params, searchParams }: Props) {
   const now = new Date();
   const eventEnded = now >= (event.endsAt ?? event.startsAt);
   if (eventEnded) redirect(`/events/${slug}`);
+
+  const selectedTicketType =
+    event.ticketTypes.find((row) => row.id === ticketType) ??
+    event.ticketTypes.find((row) => row.status === "ACTIVE") ??
+    null;
+  if (!selectedTicketType) {
+    redirect(`/events/${slug}`);
+  }
+  if (selectedTicketType.inventoryRemaining < selectedTicketType.minPerOrder) {
+    redirect(`/events/${slug}`);
+  }
+  if (selectedTicketType.saleStart && now < selectedTicketType.saleStart) {
+    redirect(`/events/${slug}`);
+  }
+  if (selectedTicketType.saleEnd && now > selectedTicketType.saleEnd) {
+    redirect(`/events/${slug}`);
+  }
 
   const existing = await prisma.booking.findFirst({
     where: {
@@ -59,7 +80,11 @@ export default async function CheckoutPage({ params, searchParams }: Props) {
     redirect(`/events/${slug}`);
   }
 
-  const quantity = Math.min(10, Math.max(1, parseInt(qty ?? "1", 10) || 1));
+  const quantity = Math.min(
+    selectedTicketType.maxPerOrder,
+    selectedTicketType.inventoryRemaining,
+    Math.max(selectedTicketType.minPerOrder, parseInt(qty ?? "1", 10) || selectedTicketType.minPerOrder),
+  );
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
@@ -82,21 +107,26 @@ export default async function CheckoutPage({ params, searchParams }: Props) {
   }
 
   const dateLine = `${formatShortDate(event.startsAt)} · ${formatShortTime(event.startsAt)}`;
-  const isFree = !event.ticketPrice || event.ticketPrice === 0;
-  const priceLabel = isFree
-    ? "Free"
-    : new Intl.NumberFormat("en-US", { style: "currency", currency: event.ticketCurrency ?? "USD" }).format(event.ticketPrice);
+  const priceLabel =
+    selectedTicketType.price === 0
+      ? "Free"
+      : new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: selectedTicketType.currency,
+        }).format(selectedTicketType.price);
 
   return (
     <CheckoutClient
       eventId={event.id}
       eventSlug={event.slug}
+      ticketTypeId={selectedTicketType.id}
+      ticketTypeName={selectedTicketType.name}
       eventTitle={event.title}
       eventImageUrl={event.imageUrl}
       dateLine={dateLine}
       priceLabel={priceLabel}
-      unitPrice={event.ticketPrice ?? 0}
-      currency={event.ticketCurrency ?? "USD"}
+      unitPrice={selectedTicketType.price}
+      currency={selectedTicketType.currency}
       quantity={quantity}
       userEmail={user?.email ?? session.user.email ?? ""}
       userName={user?.name ?? ""}

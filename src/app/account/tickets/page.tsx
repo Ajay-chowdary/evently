@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { isMockCatalog } from "@/lib/data-source";
 import { prisma } from "@/lib/db";
 import { format } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,10 @@ export const metadata = {
 };
 
 export default async function MyTicketsPage() {
+  if (isMockCatalog()) {
+    redirect("/bookings");
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/auth/signin?callbackUrl=/account/tickets");

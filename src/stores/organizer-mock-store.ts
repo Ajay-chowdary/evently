@@ -11,6 +11,13 @@ type OrganizerMockState = {
   addOrReplaceEvent: (ev: DomainEvent, ticketTypes?: TicketType[]) => void;
   removeEvent: (id: string) => void;
   patchEvent: (id: string, patch: Partial<DomainEvent>) => void;
+  setTicketTypesForEvent: (eventId: string, list: TicketType[]) => void;
+  addOrUpdateTicketType: (eventId: string, ticket: TicketType) => void;
+  deleteTicketType: (eventId: string, ticketId: string) => void;
+  setEventStatus: (id: string, status: DomainEvent["status"]) => void;
+  setEventVisibility: (id: string, visibility: DomainEvent["visibility"]) => void;
+  getEventById: (id: string) => DomainEvent | null;
+  getTicketTypesForEvent: (eventId: string) => TicketType[];
   getExtraTicketTypes: () => TicketType[];
 };
 
@@ -59,6 +66,91 @@ export const useOrganizerMockStore = create<OrganizerMockState>()(
             publishedEvents: [...s.publishedEvents, { ...seed, ...patch, updatedAt: ts }],
           };
         }),
+
+      setTicketTypesForEvent: (eventId, list) =>
+        set((s) => ({
+          ticketTypesByEventId: { ...s.ticketTypesByEventId, [eventId]: list },
+          publishedEvents: s.publishedEvents.map((e) =>
+            e.id === eventId
+              ? {
+                  ...e,
+                  ticketTypeIds: list.map((t) => t.id),
+                  updatedAt: new Date().toISOString(),
+                }
+              : e,
+          ),
+        })),
+
+      addOrUpdateTicketType: (eventId, ticket) =>
+        set((s) => {
+          const current = s.ticketTypesByEventId[eventId] ?? [];
+          const exists = current.some((t) => t.id === ticket.id);
+          const next = exists
+            ? current.map((t) => (t.id === ticket.id ? ticket : t))
+            : [...current, ticket];
+          return {
+            ticketTypesByEventId: { ...s.ticketTypesByEventId, [eventId]: next },
+            publishedEvents: s.publishedEvents.map((e) =>
+              e.id === eventId
+                ? {
+                    ...e,
+                    ticketTypeIds: next.map((t) => t.id),
+                    updatedAt: new Date().toISOString(),
+                  }
+                : e,
+            ),
+          };
+        }),
+
+      deleteTicketType: (eventId, ticketId) =>
+        set((s) => {
+          const current = s.ticketTypesByEventId[eventId] ?? [];
+          const next = current.filter((t) => t.id !== ticketId);
+          return {
+            ticketTypesByEventId: { ...s.ticketTypesByEventId, [eventId]: next },
+            publishedEvents: s.publishedEvents.map((e) =>
+              e.id === eventId
+                ? {
+                    ...e,
+                    ticketTypeIds: next.map((t) => t.id),
+                    updatedAt: new Date().toISOString(),
+                  }
+                : e,
+            ),
+          };
+        }),
+
+      setEventStatus: (id, status) =>
+        set((s) => ({
+          publishedEvents: s.publishedEvents.map((e) =>
+            e.id === id
+              ? {
+                  ...e,
+                  status,
+                  visibility: status === "published" ? (e.visibility === "private" ? "private" : "public") : "unlisted",
+                  updatedAt: new Date().toISOString(),
+                }
+              : e,
+          ),
+        })),
+
+      setEventVisibility: (id, visibility) =>
+        set((s) => ({
+          publishedEvents: s.publishedEvents.map((e) =>
+            e.id === id ? { ...e, visibility, updatedAt: new Date().toISOString() } : e,
+          ),
+        })),
+
+      getEventById: (id) => {
+        const fromStore = get().publishedEvents.find((e) => e.id === id);
+        if (fromStore) return fromStore;
+        return getSeedEvents().find((e) => e.id === id) ?? null;
+      },
+
+      getTicketTypesForEvent: (eventId) => {
+        const fromStore = get().ticketTypesByEventId[eventId];
+        return fromStore ?? [];
+      },
 
       getExtraTicketTypes: () => {
         const m = get().ticketTypesByEventId;

@@ -25,6 +25,8 @@ import {
 } from "@/lib/events";
 import { hasDatabaseUrl } from "@/lib/env";
 
+let forceMockCatalog = false;
+
 export type UnifiedEventFilters = EventFilters & {
   to?: string;
   type?: string;
@@ -34,7 +36,27 @@ export type UnifiedEventFilters = EventFilters & {
 };
 
 export function isMockCatalog(): boolean {
-  return process.env.NEXT_PUBLIC_USE_MOCK_CATALOG === "true" || !hasDatabaseUrl();
+  return process.env.NEXT_PUBLIC_USE_MOCK_CATALOG === "true" || !hasDatabaseUrl() || forceMockCatalog;
+}
+
+function isDatabaseConnectionError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.name === "PrismaClientInitializationError" ||
+    error.message.includes("Can't reach database server") ||
+    error.message.includes("PrismaClientInitializationError")
+  );
+}
+
+function enableMockCatalogFallback(error: unknown) {
+  if (!isDatabaseConnectionError(error)) {
+    throw error;
+  }
+
+  forceMockCatalog = true;
 }
 
 function prismaFiltersToWhere(f: UnifiedEventFilters): EventFilters {
@@ -60,17 +82,34 @@ export async function loadEventsForBrowse(
     };
     return searchMockEvents(mockFilters, extraMockEvents);
   }
-  const rows = await prismaGetEvents(prismaFiltersToWhere(filters));
-  if (filters.to) {
-    const end = new Date(filters.to);
-    end.setHours(23, 59, 59, 999);
-    return rows.filter((e) => new Date(e.startsAt) <= end);
+
+  try {
+    const rows = await prismaGetEvents(prismaFiltersToWhere(filters));
+    if (filters.to) {
+      const end = new Date(filters.to);
+      end.setHours(23, 59, 59, 999);
+      return rows.filter((e) => new Date(e.startsAt) <= end);
+    }
+    const sorted = [...rows];
+    if (filters.sort === "date" || !filters.sort) {
+      sorted.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+    }
+    return sorted;
+  } catch (error) {
+    enableMockCatalogFallback(error);
+    const mockFilters: MockEventFilters = {
+      q: filters.q,
+      city: filters.city,
+      category: filters.category,
+      from: filters.from,
+      to: filters.to,
+      type: filters.type,
+      minPrice: filters.minPrice,
+      maxPrice: filters.maxPrice,
+      sort: filters.sort,
+    };
+    return searchMockEvents(mockFilters, extraMockEvents);
   }
-  const sorted = [...rows];
-  if (filters.sort === "date" || !filters.sort) {
-    sorted.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
-  }
-  return sorted;
 }
 
 export async function loadEventDetailBySlug(
@@ -82,9 +121,16 @@ export async function loadEventDetailBySlug(
     if (!event) return null;
     return { mode: "mock", event };
   }
-  const event = await prismaGetEventBySlug(slug);
-  if (!event) return null;
-  return { mode: "prisma", event };
+  try {
+    const event = await prismaGetEventBySlug(slug);
+    if (!event) return null;
+    return { mode: "prisma", event };
+  } catch (error) {
+    enableMockCatalogFallback(error);
+    const event = getMockEventBySlug(slug, extraMockEvents);
+    if (!event) return null;
+    return { mode: "mock", event };
+  }
 }
 
 export async function loadFeaturedForHome(
@@ -94,7 +140,12 @@ export async function loadFeaturedForHome(
   if (isMockCatalog()) {
     return getMockFeaturedPublic(limit, extraMockEvents);
   }
-  return prismaFeatured(limit);
+  try {
+    return await prismaFeatured(limit);
+  } catch (error) {
+    enableMockCatalogFallback(error);
+    return getMockFeaturedPublic(limit, extraMockEvents);
+  }
 }
 
 export async function loadSimilarForDetail(
@@ -106,26 +157,41 @@ export async function loadSimilarForDetail(
   if (isMockCatalog()) {
     return getMockRelatedPublic(category, excludeId, take, extraMockEvents);
   }
-  return prismaSimilar(category, excludeId, take);
+  try {
+    return await prismaSimilar(category, excludeId, take);
+  } catch (error) {
+    enableMockCatalogFallback(error);
+    return getMockRelatedPublic(category, excludeId, take, extraMockEvents);
+  }
 }
 
 export async function loadDistinctCities(extraMockEvents: DomainEvent[] = []): Promise<string[]> {
   if (isMockCatalog()) {
     return getMockDistinctCities(extraMockEvents);
   }
-  return prismaDistinctCities();
+  try {
+    return await prismaDistinctCities();
+  } catch (error) {
+    enableMockCatalogFallback(error);
+    return getMockDistinctCities(extraMockEvents);
+  }
 }
 
 export async function loadCategoriesForDiscovery() {
   if (isMockCatalog()) {
     return getMockCategories();
   }
-  const names = await prismaDistinctCategories();
-  return names.map((name, i) => ({
-    id: `legacy-${i}`,
-    name,
-    slug: name.toLowerCase().replace(/\s+/g, "-"),
-    icon: null,
-    description: "",
-  }));
+  try {
+    const names = await prismaDistinctCategories();
+    return names.map((name, i) => ({
+      id: `legacy-${i}`,
+      name,
+      slug: name.toLowerCase().replace(/\s+/g, "-"),
+      icon: null,
+      description: "",
+    }));
+  } catch (error) {
+    enableMockCatalogFallback(error);
+    return getMockCategories();
+  }
 }

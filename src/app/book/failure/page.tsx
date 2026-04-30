@@ -1,10 +1,38 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
-type SearchParams = Promise<{ reason?: string }>;
+type SearchParams = Promise<{ reason?: string; booking?: string; event?: string; qty?: string; ticketType?: string }>;
 
 export default async function BookFailurePage({ searchParams }: { searchParams: SearchParams }) {
-  const { reason } = await searchParams;
+  const { reason, booking, event, qty, ticketType } = await searchParams;
+  const session = await auth();
+
+  if (booking && session?.user?.id) {
+    await prisma.booking.updateMany({
+      where: {
+        id: booking,
+        userId: session.user.id,
+        status: "PENDING_PAYMENT",
+      },
+      data: {
+        status: "EXPIRED",
+        failureReason: reason?.replace(/\+/g, " ") || "Checkout was cancelled.",
+      },
+    });
+  }
+
+  const retryHref = event
+    ? `/events/${event}/checkout?${new URLSearchParams(
+        Object.fromEntries(
+          Object.entries({
+            qty: qty ?? "",
+            ticketType: ticketType ?? "",
+          }).filter(([, value]) => Boolean(value)),
+        ),
+      ).toString()}`
+    : "/events";
 
   return (
     <main className="mx-auto flex min-h-[50vh] max-w-xl flex-1 flex-col justify-center px-6 py-16 sm:px-8">
@@ -15,6 +43,9 @@ export default async function BookFailurePage({ searchParams }: { searchParams: 
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button className="rounded-xl" asChild>
+            <Link href={retryHref}>Try again</Link>
+          </Button>
+          <Button variant="secondary" className="rounded-xl" asChild>
             <Link href="/events">Back to events</Link>
           </Button>
         </div>

@@ -36,6 +36,7 @@ export async function claimTicket(
   eventId: string,
   quantity: number = 1,
   paymentMethod: string = "free",
+  ticketTypeId?: string,
 ): Promise<ClaimTicketResult> {
   const session = await auth();
   if (!session?.user?.id) {
@@ -80,12 +81,23 @@ export async function claimTicket(
     return { error: "You already have tickets for this event.", claimed: true, code: "ALREADY" };
   }
 
-  const ticketType = event.ticketTypes[0];
+  const ticketType =
+    event.ticketTypes.find((candidate) => candidate.id === ticketTypeId) ??
+    event.ticketTypes[0];
   if (!ticketType) {
     return { error: "No active ticket type is available.", claimed: null, code: "NOT_FOUND" };
   }
   if (ticketType.price > 0 || paymentMethod !== "free") {
     return { error: "This event requires secure checkout.", claimed: null, code: "PAID_ONLY" };
+  }
+  if (ticketType.saleStart && now < ticketType.saleStart) {
+    return { error: "This ticket is not on sale yet.", claimed: null, code: "NOT_FOUND" };
+  }
+  if (ticketType.saleEnd && now > ticketType.saleEnd) {
+    return { error: "Ticket sales have ended.", claimed: null, code: "SALES_ENDED" };
+  }
+  if (quantity < ticketType.minPerOrder || quantity > ticketType.maxPerOrder) {
+    return { error: "Selected quantity is outside the allowed range.", claimed: null, code: "NOT_FOUND" };
   }
   if (ticketType.inventoryRemaining < quantity) {
     return { error: "Not enough tickets remain.", claimed: null, code: "SOLD_OUT" };
@@ -96,56 +108,73 @@ export async function claimTicket(
     select: { email: true, name: true },
   });
 
-  await prisma.$transaction(async (tx) => {
-    await tx.ticketType.update({
-      where: { id: ticketType.id },
-      data: {
-        inventoryRemaining: {
-          decrement: quantity,
-        },
-      },
-    });
-
-    const booking = await tx.booking.create({
-      data: {
-        referenceCode: makeReference("BK"),
-        userId: session.user.id,
-        eventId,
-        status: "CONFIRMED",
-        subtotal: 0,
-        serviceFee: 0,
-        total: 0,
-        currency: ticketType.currency,
-        paidAt: new Date(),
-        lineItems: {
-          create: {
-            ticketTypeId: ticketType.id,
-            ticketTypeName: ticketType.name,
-            quantity,
-            unitPrice: 0,
-            lineTotal: 0,
+  try {
+    await prisma.$transaction(async (tx) => {
+      const inventoryUpdate = await tx.ticketType.updateMany({
+        where: {
+          id: ticketType.id,
+          inventoryRemaining: {
+            gte: quantity,
           },
         },
-      },
-    });
-
-    for (let index = 0; index < quantity; index += 1) {
-      await tx.ticket.create({
         data: {
-          referenceCode: makeReference("TK"),
-          bookingId: booking.id,
-          userId: session.user.id,
-          eventId,
-          ticketTypeId: ticketType.id,
-          quantity: 1,
-          paymentMethod: "free",
-          attendeeName: attendee?.name?.trim() || attendee?.email || "Guest",
-          attendeeEmail: attendee?.email || session.user.email,
-          qrCodeValue: crypto.randomUUID(),
+          inventoryRemaining: {
+            decrement: quantity,
+          },
         },
       });
+
+      if (inventoryUpdate.count === 0) {
+        throw new Error("EVENTLY_INVENTORY_CONFLICT");
+      }
+
+      const booking = await tx.booking.create({
+        data: {
+          referenceCode: makeReference("BK"),
+          userId: session.user.id,
+          eventId,
+          status: "CONFIRMED",
+          subtotal: 0,
+          serviceFee: 0,
+          total: 0,
+          currency: ticketType.currency,
+          paidAt: new Date(),
+          lineItems: {
+            create: {
+              ticketTypeId: ticketType.id,
+              ticketTypeName: ticketType.name,
+              quantity,
+              unitPrice: 0,
+              lineTotal: 0,
+            },
+          },
+        },
+      });
+
+      for (let index = 0; index < quantity; index += 1) {
+        await tx.ticket.create({
+          data: {
+            referenceCode: makeReference("TK"),
+            bookingId: booking.id,
+            userId: session.user.id,
+            eventId,
+            ticketTypeId: ticketType.id,
+            quantity: 1,
+            paymentMethod: "free",
+            attendeeName: attendee?.name?.trim() || attendee?.email || "Guest",
+            attendeeEmail: attendee?.email || session.user.email,
+            qrCodeValue: crypto.randomUUID(),
+          },
+        });
+      }
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "EVENTLY_INVENTORY_CONFLICT") {
+      return { error: "Not enough tickets remain.", claimed: null, code: "SOLD_OUT" };
     }
-  });
+
+    throw error;
+  }
 
   revalidatePathsForEvent(event.slug);
   return { error: null, claimed: true, code: "OK" };

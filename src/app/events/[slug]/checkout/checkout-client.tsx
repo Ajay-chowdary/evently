@@ -23,6 +23,8 @@ function formatCurrency(amount: number, currency: string): string {
 export function CheckoutClient({
   eventId,
   eventSlug,
+  ticketTypeId,
+  ticketTypeName,
   eventTitle,
   eventImageUrl,
   dateLine,
@@ -35,6 +37,8 @@ export function CheckoutClient({
 }: {
   eventId: string;
   eventSlug: string;
+  ticketTypeId: string;
+  ticketTypeName: string;
   eventTitle: string;
   eventImageUrl: string;
   dateLine: string;
@@ -47,6 +51,7 @@ export function CheckoutClient({
 }) {
   const lineTotal = formatCurrency(unitPrice * quantity, currency);
   const orderTotal = formatCurrency(unitPrice * quantity, currency);
+  const isPaid = unitPrice > 0;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +66,7 @@ export function CheckoutClient({
     return parts.length > 1 ? parts.slice(1).join(" ") : "";
   });
   const [email, setEmail] = useState(userEmail);
-  const [paymentMethod, setPaymentMethod] = useState("free");
+  const [paymentMethod, setPaymentMethod] = useState(isPaid ? "card" : "free");
   const [keepUpdated, setKeepUpdated] = useState(true);
 
   const [timeLeft, setTimeLeft] = useState(20 * 60);
@@ -94,7 +99,38 @@ export function CheckoutClient({
 
     setError(null);
     startTransition(async () => {
-      const res = await claimTicket(eventId, quantity, paymentMethod);
+      if (isPaid) {
+        try {
+          const attendeeName = `${firstName.trim()} ${lastName.trim()}`.trim();
+          const response = await fetch("/api/checkout", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              eventId,
+              ticketTypeId,
+              quantity,
+              attendeeName,
+              attendeeEmail: email.trim(),
+            }),
+          });
+
+          const payload = (await response.json().catch(() => null)) as { error?: string; url?: string } | null;
+          if (!response.ok || !payload?.url) {
+            setError(payload?.error ?? "Unable to start secure checkout. Please try again.");
+            return;
+          }
+
+          window.location.assign(payload.url);
+          return;
+        } catch {
+          setError("Unable to start secure checkout. Please try again.");
+          return;
+        }
+      }
+
+      const res = await claimTicket(eventId, quantity, paymentMethod, ticketTypeId);
       if (res.claimed) {
         setSuccess(true);
         return;
@@ -166,6 +202,7 @@ export function CheckoutClient({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-zinc-900 dark:text-zinc-50 truncate">{eventTitle}</p>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">{ticketTypeName}</p>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">{dateLine}</p>
                   <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{priceLabel}</p>
                 </div>
@@ -253,20 +290,27 @@ export function CheckoutClient({
               <section className="mt-8">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Pay with</h2>
                 <div className="mt-4 space-y-3">
+                  {isPaid ? (
                   <button
                     type="button"
                     onClick={() => setPaymentMethod("card")}
-                    disabled
                     className={`flex w-full items-center gap-3 rounded-lg border px-4 py-4 text-left transition ${
                       paymentMethod === "card"
                         ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-                        : "border-zinc-200 bg-white opacity-60 dark:border-zinc-800 dark:bg-zinc-950"
+                        : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
                     }`}
                   >
                     <CreditCard className="size-5 text-zinc-500" />
                     <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Credit or debit card</span>
-                    <span className="ml-auto text-xs text-zinc-400">Coming later</span>
+                    <span className="ml-auto text-xs text-zinc-400">Stripe Checkout</span>
                   </button>
+                  ) : (
+                    <div className="flex w-full items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4 text-left dark:border-emerald-900 dark:bg-emerald-950/30">
+                      <CheckCircle2 className="size-5 text-emerald-600" />
+                      <span className="text-sm font-medium text-emerald-800 dark:text-emerald-200">No payment required</span>
+                      <span className="ml-auto text-xs text-emerald-700 dark:text-emerald-300">Free RSVP</span>
+                    </div>
+                  )}
 
                   <button
                     type="button"
@@ -318,7 +362,7 @@ export function CheckoutClient({
                   disabled={pending || timeLeft <= 0}
                   className="mt-4 h-12 w-full max-w-xs rounded-lg bg-[#d1410c] text-base font-semibold text-white shadow-sm hover:bg-[#b7370a]"
                 >
-                  {pending ? "Processing..." : "Place Order"}
+                  {pending ? "Processing..." : isPaid ? "Continue to secure payment" : "Place Order"}
                 </Button>
 
                 <div className="mt-6 flex items-center gap-2 text-xs text-zinc-400">
@@ -344,7 +388,7 @@ export function CheckoutClient({
                 <div className="mt-4 space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-zinc-600 dark:text-zinc-400">
-                      {quantity} x {eventTitle.length > 25 ? eventTitle.slice(0, 25) + "..." : eventTitle}
+                      {quantity} x {ticketTypeName.length > 25 ? ticketTypeName.slice(0, 25) + "..." : ticketTypeName}
                     </span>
                     <span className="text-zinc-900 dark:text-zinc-50">{lineTotal}</span>
                   </div>
@@ -370,7 +414,7 @@ export function CheckoutClient({
           <div className="border-t border-zinc-200 bg-zinc-50 px-6 py-6 dark:border-zinc-800 dark:bg-zinc-900 md:hidden">
             <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Order summary</h3>
             <div className="mt-3 flex justify-between text-sm">
-              <span className="text-zinc-600 dark:text-zinc-400">{quantity} x {eventTitle}</span>
+              <span className="text-zinc-600 dark:text-zinc-400">{quantity} x {ticketTypeName}</span>
               <span className="text-zinc-900 dark:text-zinc-50">{lineTotal}</span>
             </div>
             <div className="mt-3 flex justify-between border-t border-zinc-200 pt-3 dark:border-zinc-700">

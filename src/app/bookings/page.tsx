@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BookingsListClient } from "@/components/booking/bookings-list-client";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
+import { isMockCatalog } from "@/lib/data-source";
 import { prisma } from "@/lib/db";
 import { formatLongDateTime } from "@/lib/format-date";
 import { formatCurrency } from "@/lib/formatters/currency";
@@ -96,6 +98,26 @@ async function loadBookings(userId: string) {
 }
 
 export default async function BookingsPage() {
+  if (isMockCatalog()) {
+    return (
+      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10 sm:px-8">
+        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">My bookings</h1>
+            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+              Booking history, confirmation references, and ticket access.
+            </p>
+          </div>
+          <Button variant="secondary" className="w-fit rounded-full" asChild>
+            <Link href="/events">Browse more events</Link>
+          </Button>
+        </div>
+
+        <BookingsListClient />
+      </main>
+    );
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/auth/signin?callbackUrl=/bookings");

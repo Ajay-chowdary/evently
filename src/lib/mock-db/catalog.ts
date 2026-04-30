@@ -162,11 +162,12 @@ export function getMockEventBySlug(
   slug: string,
   extraEvents: DomainEvent[] = [],
   extraTicketTypes: TicketType[] = [],
+  options?: { includeDraft?: boolean },
 ): CatalogEventDetail | null {
   const all = getSeedEventsMerged(extraEvents);
   const ev = all.find((e) => e.slug === slug);
   if (!ev) return null;
-  if (ev.status === "draft") return null;
+  if (!options?.includeDraft && ev.status === "draft") return null;
   if (ev.visibility === "private") return null;
   const venue = venueMap.get(ev.venueId);
   const organizer = organizerMap.get(ev.organizerId);

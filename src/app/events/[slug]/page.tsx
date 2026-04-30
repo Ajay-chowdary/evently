@@ -7,7 +7,7 @@ import {
   Users,
   Ticket,
 } from "lucide-react";
-import type { TicketBlockReason } from "@/components/event-ticket-sidebar";
+import type { SidebarTicketType, TicketBlockReason } from "@/components/event-ticket-sidebar";
 import { EventMockDetailClient } from "@/components/events/event-mock-detail-client";
 import { EventDetailsCollapsible } from "@/components/event-details-collapsible";
 import { EventHeroCarousel } from "@/components/event-hero-carousel";
@@ -79,6 +79,11 @@ function formatShortTime(d: Date): string {
   }).format(d);
 }
 
+function formatCurrency(amount: number, currency: string): string {
+  if (amount === 0) return "Free";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
+}
+
 export default async function EventDetailPage({ params }: Props) {
   const { slug } = await params;
 
@@ -118,15 +123,41 @@ export default async function EventDetailPage({ params }: Props) {
   const eventEnded = now >= (event.endsAt ?? event.startsAt);
   const salesEndedByTime = event.salesEndsAt ? now >= event.salesEndsAt : false;
 
+  const sidebarTicketTypes: SidebarTicketType[] = event.ticketTypes.map((ticketType) => ({
+    id: ticketType.id,
+    name: ticketType.name,
+    description: ticketType.description,
+    price: ticketType.price,
+    currency: ticketType.currency,
+    inventoryRemaining: ticketType.inventoryRemaining,
+    minPerOrder: ticketType.minPerOrder,
+    maxPerOrder: ticketType.maxPerOrder,
+    saleStart: ticketType.saleStart ? ticketType.saleStart.toISOString() : null,
+    saleEnd: ticketType.saleEnd ? ticketType.saleEnd.toISOString() : null,
+    status: ticketType.status === "SOLD_OUT" ? "SOLD_OUT" : "ACTIVE",
+  }));
+  const selectableTicketTypes = sidebarTicketTypes.filter(
+    (ticketType) => ticketType.status === "ACTIVE" && ticketType.inventoryRemaining > 0,
+  );
+
   let totalSeatsBooked = 0;
   if (event.capacity != null) {
     const agg = await prisma.ticket.aggregate({
-      where: { eventId: event.id },
+      where: {
+        eventId: event.id,
+        status: {
+          in: ["ISSUED", "USED"],
+        },
+      },
       _sum: { quantity: true },
     });
     totalSeatsBooked = agg._sum.quantity ?? 0;
   }
-  const soldOut = event.capacity != null && totalSeatsBooked >= event.capacity;
+  const soldOutByCapacity = event.capacity != null && totalSeatsBooked >= event.capacity;
+  const soldOutByTickets =
+    sidebarTicketTypes.length > 0 &&
+    sidebarTicketTypes.every((ticketType) => ticketType.status === "SOLD_OUT" || ticketType.inventoryRemaining <= 0);
+  const soldOut = soldOutByCapacity || soldOutByTickets;
 
   let blockReason: TicketBlockReason = null;
   if (eventEnded) blockReason = "EVENT_ENDED";
@@ -147,10 +178,13 @@ export default async function EventDetailPage({ params }: Props) {
     : 0;
 
   const sidebarDateLine = `${formatShortDate(event.startsAt)} · ${formatShortTime(event.startsAt)}`;
-  const isFree = !event.ticketPrice || event.ticketPrice === 0;
-  const priceLabel = isFree
-    ? "Free"
-    : new Intl.NumberFormat("en-US", { style: "currency", currency: event.ticketCurrency ?? "USD" }).format(event.ticketPrice);
+  const primaryTicketType = selectableTicketTypes[0] ?? sidebarTicketTypes[0] ?? null;
+  const lowestTicketPrice = primaryTicketType?.price ?? event.ticketPrice ?? 0;
+  const lowestTicketCurrency = primaryTicketType?.currency ?? event.ticketCurrency ?? "USD";
+  const hasMultipleTicketTypes = sidebarTicketTypes.length > 1;
+  const priceLabel = hasMultipleTicketTypes
+    ? `From ${formatCurrency(lowestTicketPrice, lowestTicketCurrency)}`
+    : formatCurrency(lowestTicketPrice, lowestTicketCurrency);
 
   return (
     <main className="flex-1 pb-16 pt-20">
@@ -365,10 +399,10 @@ export default async function EventDetailPage({ params }: Props) {
             blockReason={blockReason}
             ticketNote={event.ticketNote}
             priceLabel={priceLabel}
-            unitPrice={event.ticketPrice ?? 0}
-            currency={event.ticketCurrency ?? "USD"}
+            currency={lowestTicketCurrency}
             sidebarDateLine={sidebarDateLine}
             eventImageUrl={gallery[0] ?? event.imageUrl}
+            ticketTypes={sidebarTicketTypes}
           />
         </div>
       </div>

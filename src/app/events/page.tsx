@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Event } from "@/generated/prisma/client";
 import { isMockCatalog, loadCategoriesForDiscovery, loadDistinctCities, loadEventsForBrowse } from "@/lib/data-source";
-import { getEvents } from "@/lib/events";
 import type { MockEventFilters } from "@/lib/mock-db/catalog";
 import type { UnifiedEventFilters } from "@/lib/data-source";
 
@@ -48,56 +47,32 @@ export default async function EventsPage({
   const sort: "date" | "relevance" | "price" =
     sortRaw === "price" || sortRaw === "relevance" || sortRaw === "date" ? sortRaw : "date";
 
-  const isMock = isMockCatalog();
+  const requestedMock = isMockCatalog();
 
   const unified: UnifiedEventFilters = {
     q,
     city,
     category: category && category !== "all" ? category : undefined,
     from,
-    to: isMock ? to : undefined,
-    type: isMock && type && type !== "all" ? type : undefined,
-    minPrice: isMock ? minPrice : undefined,
-    maxPrice: isMock ? maxPrice : undefined,
-    sort: isMock ? sort : sort === "date" ? "date" : undefined,
+    to,
+    type: type && type !== "all" ? type : undefined,
+    minPrice,
+    maxPrice,
+    sort,
   };
 
   const [cities, categoryRows, events] = await Promise.all([
     loadDistinctCities(),
     loadCategoriesForDiscovery(),
-    !isMock ? loadEventsForBrowse(unified) : Promise.resolve([] as Event[]),
+    loadEventsForBrowse(unified),
   ]);
 
-  let prismaPublishedForMock: Event[] = [];
-  if (isMock) {
-    prismaPublishedForMock = await getEvents({
-      q,
-      city,
-      category: category && category !== "all" ? category : undefined,
-      from,
-    });
-    if (to) {
-      const end = new Date(to);
-      if (!Number.isNaN(end.getTime())) {
-        end.setHours(23, 59, 59, 999);
-        prismaPublishedForMock = prismaPublishedForMock.filter((e) => new Date(e.startsAt) <= end);
-      }
-    }
-    if (minPrice != null && minPrice > 0) {
-      prismaPublishedForMock = [];
-    }
-    if (type && type !== "all") {
-      const cat = categoryRows.find((c) => c.slug === type);
-      if (cat) {
-        prismaPublishedForMock = prismaPublishedForMock.filter((e) => e.category === cat.name);
-      } else {
-        const tnorm = type.toLowerCase();
-        prismaPublishedForMock = prismaPublishedForMock.filter(
-          (e) => e.category.toLowerCase().replace(/\s+/g, "-") === tnorm,
-        );
-      }
-    }
-  }
+  const isMock =
+    requestedMock ||
+    ("minPrice" in (events[0] ?? {})) ||
+    categoryRows.some((categoryRow) => categoryRow.id.startsWith("cat_"));
+
+  const prismaPublishedForMock: Event[] = [];
 
   const mockFilters: MockEventFilters = {
     q,
@@ -125,7 +100,7 @@ export default async function EventsPage({
       <form
         method="get"
         action="/events"
-        className="sticky top-[4.5rem] z-30 -mx-6 mb-10 border-b border-zinc-200 bg-background/80 px-6 py-4 backdrop-blur-md dark:border-zinc-800 sm:-mx-8 sm:px-8 sm:top-24"
+        className="-mx-6 mb-10 border-b border-zinc-200 bg-background px-6 py-4 dark:border-zinc-800 sm:-mx-8 sm:px-8"
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
           <div className="flex-1 space-y-2">
@@ -268,7 +243,7 @@ export default async function EventsPage({
               <Link href="/events">Show all events</Link>
             </Button>
             <Button variant="secondary" className="rounded-full" asChild>
-              <Link href="/dashboard">My Events</Link>
+              <Link href="/organizer-demo">My Events</Link>
             </Button>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Briefcase, Heart, Music2, Palette, Search, Trophy, Users } from "lucide-react";
 import { EventCard } from "@/components/event-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,15 @@ const showcaseCities = [
   "Boston",
 ];
 
+const categoryIcons = {
+  Music2,
+  Heart,
+  Briefcase,
+  Palette,
+  Trophy,
+  Users,
+} as const;
+
 export async function HomeDiscovery() {
   const [featured, cities, categories] = await Promise.all([
     loadFeaturedForHome(6),
@@ -28,7 +37,7 @@ export async function HomeDiscovery() {
   const citySet = new Set(cities);
   const destinations = showcaseCities.filter((c) => citySet.has(c));
 
-  const isMock = isMockCatalog();
+  const isMock = isMockCatalog() || ("minPrice" in (featured[0] ?? {}));
 
   return (
     <section className="border-t border-zinc-200 bg-zinc-50 py-20 dark:border-zinc-800 dark:bg-zinc-950">
@@ -67,20 +76,28 @@ export async function HomeDiscovery() {
 
         <div className="mt-10">
           <p className="mb-3 text-center text-sm font-medium text-zinc-500 dark:text-zinc-400">Categories</p>
-          <div className="flex flex-wrap justify-center gap-2">
+          <div className="flex justify-center overflow-x-auto pb-2">
+            <div className="flex min-w-max gap-4 px-1">
             {categories.map((cat) => (
-              <Button key={cat.id} variant="secondary" size="sm" className="rounded-full" asChild>
-                <Link
-                  href={
-                    isMock
-                      ? `/events/category/${encodeURIComponent(cat.slug)}`
-                      : `/events?category=${encodeURIComponent(cat.name)}`
-                  }
-                >
-                  {cat.name}
-                </Link>
-              </Button>
+              <Link
+                key={cat.id}
+                href={
+                  isMock
+                    ? `/events/category/${encodeURIComponent(cat.slug)}`
+                    : `/events?category=${encodeURIComponent(cat.name)}`
+                }
+                className="group flex w-[96px] flex-col items-center gap-2 text-center"
+              >
+                <span className="flex h-20 w-20 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+                  {(() => {
+                    const Icon = categoryIcons[(cat.icon as keyof typeof categoryIcons) ?? "Music2"] ?? Music2;
+                    return <Icon className="h-8 w-8" aria-hidden />;
+                  })()}
+                </span>
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{cat.name}</span>
+              </Link>
             ))}
+            </div>
           </div>
         </div>
 

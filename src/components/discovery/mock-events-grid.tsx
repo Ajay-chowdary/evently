@@ -67,7 +67,7 @@ export function MockEventsGrid({
           If you just created an event, open Organizer dashboard to confirm it is published, then search again.
         </p>
         <Link
-          href="/dashboard"
+          href="/organizer-demo"
           className="mt-6 inline-block text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
         >
           My Events

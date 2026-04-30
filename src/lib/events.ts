@@ -10,8 +10,16 @@ export type EventFilters = {
 
 const publicEventInclude = {
   organizer: { select: { id: true, name: true, contactEmail: true, handle: true } },
+  ticketTypes: {
+    where: {
+      status: {
+        in: ["ACTIVE", "SOLD_OUT"],
+      },
+    },
+    orderBy: [{ price: "asc" }, { sortOrder: "asc" }],
+  },
   _count: { select: { tickets: true } },
-} as const;
+} satisfies Prisma.EventInclude;
 
 export type PublicEventDetail = Prisma.EventGetPayload<{ include: typeof publicEventInclude }>;
 

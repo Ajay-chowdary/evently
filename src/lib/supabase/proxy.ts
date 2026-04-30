@@ -9,6 +9,10 @@ function isProtectedPath(pathname: string) {
 }
 
 export async function updateSupabaseSession(request: NextRequest) {
+  if (process.env.NEXT_PUBLIC_USE_MOCK_CATALOG === "true") {
+    return NextResponse.next({ request });
+  }
+
   if (!hasSupabaseBrowserEnv()) {
     return NextResponse.next({ request });
   }

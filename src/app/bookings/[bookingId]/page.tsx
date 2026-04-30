@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { BookingDetailClient } from "@/components/booking/booking-detail-client";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
+import { isMockCatalog } from "@/lib/data-source";
 import { prisma } from "@/lib/db";
 import { formatLongDateTime } from "@/lib/format-date";
 import { formatCurrency } from "@/lib/formatters/currency";
@@ -9,12 +11,27 @@ import { formatCurrency } from "@/lib/formatters/currency";
 type Props = { params: Promise<{ bookingId: string }> };
 
 export default async function BookingDetailPage({ params }: Props) {
+  const { bookingId } = await params;
+
+  if (isMockCatalog()) {
+    return (
+      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10 sm:px-8">
+        <p className="mb-6">
+          <Link href="/bookings" className="text-sm font-medium text-orange-600 hover:underline dark:text-orange-400">
+            All bookings
+          </Link>
+        </p>
+
+        <BookingDetailClient bookingId={bookingId} />
+      </main>
+    );
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/auth/signin?callbackUrl=/bookings");
   }
 
-  const { bookingId } = await params;
   const booking = await prisma.booking.findFirst({
     where: { id: bookingId, userId: session.user.id },
     include: {

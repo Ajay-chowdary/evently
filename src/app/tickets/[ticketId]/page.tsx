@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import Image from "next/image";
+import { TicketPassClient } from "@/components/booking/ticket-pass-client";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
+import { isMockCatalog } from "@/lib/data-source";
 import { prisma } from "@/lib/db";
 import { formatLongDateTime } from "@/lib/format-date";
 import { generateTicketQrDataUrl } from "@/lib/qr";
@@ -10,12 +12,27 @@ import { generateTicketQrDataUrl } from "@/lib/qr";
 type Props = { params: Promise<{ ticketId: string }> };
 
 export default async function TicketPassPage({ params }: Props) {
+  const { ticketId } = await params;
+
+  if (isMockCatalog()) {
+    return (
+      <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10 sm:px-8">
+        <p className="mb-6">
+          <Link href="/bookings" className="text-sm font-medium text-orange-600 hover:underline dark:text-orange-400">
+            Back to bookings
+          </Link>
+        </p>
+
+        <TicketPassClient ticketId={ticketId} />
+      </main>
+    );
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/auth/signin?callbackUrl=/account/tickets");
   }
 
-  const { ticketId } = await params;
   const ticket = await prisma.ticket.findFirst({
     where: { id: ticketId, userId: session.user.id },
     include: {
