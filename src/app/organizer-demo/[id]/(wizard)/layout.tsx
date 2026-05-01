@@ -3,15 +3,11 @@
 import Link from "next/link";
 import { Circle, Eye, MoreHorizontal } from "lucide-react";
 import { useParams, usePathname } from "next/navigation";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WizardEventCard } from "@/components/organizer/wizard/event-card";
 import { cn } from "@/lib/utils";
 import { useOrganizerMockStore } from "@/stores/organizer-mock-store";
-
-const subscribeHydrated = (cb: () => void) => useOrganizerMockStore.persist.onFinishHydration(cb);
-const getHydrated = () => useOrganizerMockStore.persist.hasHydrated();
-const getServerHydrated = () => false;
 
 const steps = [
   {
@@ -45,9 +41,10 @@ export default function OrganizerWizardLayout({ children }: { children: React.Re
 
   const event = useOrganizerMockStore((s) => s.getEventById(id));
   const setEventStatus = useOrganizerMockStore((s) => s.setEventStatus);
-  const hydrated = useSyncExternalStore(subscribeHydrated, getHydrated, getServerHydrated);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  if (!hydrated) {
+  if (!mounted) {
     return <main className="p-8 text-zinc-500 dark:text-zinc-400">Loading event workspace...</main>;
   }
 

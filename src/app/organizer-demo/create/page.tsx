@@ -9,12 +9,12 @@ import { useOrganizerMockStore } from "@/stores/organizer-mock-store";
 export default function OrganizerDemoCreatePage() {
   const router = useRouter();
   const hasRun = useRef(false);
-  const published = useOrganizerMockStore((s) => s.publishedEvents);
-  const addOrReplaceEvent = useOrganizerMockStore((s) => s.addOrReplaceEvent);
 
   useEffect(() => {
     if (hasRun.current) return;
     hasRun.current = true;
+
+    const { addOrReplaceEvent, publishedEvents } = useOrganizerMockStore.getState();
 
     const start = new Date();
     start.setDate(start.getDate() + 7);
@@ -35,11 +35,11 @@ export default function OrganizerDemoCreatePage() {
         endDateTimeIso: end.toISOString(),
         status: "draft",
       },
-      published,
+      publishedEvents,
     );
     addOrReplaceEvent({ ...event, ticketTypeIds: [] }, []);
     router.replace(`/organizer-demo/${event.id}/build`);
-  }, [addOrReplaceEvent, published, router]);
+  }, [router]);
 
   return (
     <main className="py-20 text-center text-zinc-500 dark:text-zinc-400">

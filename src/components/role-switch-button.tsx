@@ -2,7 +2,7 @@
 
 import { ArrowLeftRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useUserRoleStore, type UserRoleMode } from "@/stores/user-role-store";
 
@@ -11,14 +11,11 @@ const HOME_FOR_MODE: Record<UserRoleMode, string> = {
   organizing: "/organizer-demo",
 };
 
-const subscribeHydrated = (cb: () => void) => useUserRoleStore.persist.onFinishHydration(cb);
-const getHydrated = () => useUserRoleStore.persist.hasHydrated();
-const getServerHydrated = () => false;
-
 export function useHydratedRoleMode(): UserRoleMode {
   const mode = useUserRoleStore((s) => s.mode);
-  const hydrated = useSyncExternalStore(subscribeHydrated, getHydrated, getServerHydrated);
-  return hydrated ? mode : "attending";
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted ? mode : "attending";
 }
 
 export function RoleSwitchButton({
