@@ -6,6 +6,14 @@ import {
   SEED_VENUES,
 } from "@/mock-data/seed";
 import type { CatalogEventDetail, DomainEvent, PublicEventListItem, TicketType } from "@/types/domain";
+import { EVENT_COVER_PLACEHOLDER } from "@/lib/cover-image";
+
+function bestCoverFor(ev: DomainEvent): string {
+  const cover = ev.coverImage?.trim() ?? "";
+  if (cover && cover !== EVENT_COVER_PLACEHOLDER) return cover;
+  const fromGallery = ev.galleryImages?.find((g) => g && g.trim().length > 0);
+  return fromGallery ?? cover ?? EVENT_COVER_PLACEHOLDER;
+}
 
 const venueMap = new Map(SEED_VENUES.map((v) => [v.id, v]));
 const organizerMap = new Map(SEED_ORGANIZERS.map((o) => [o.id, o]));
@@ -54,7 +62,7 @@ export function domainEventToPublicListItem(ev: DomainEvent, extraAll: TicketTyp
     title: ev.title,
     category: ev.category,
     city: listCity,
-    imageUrl: ev.coverImage,
+    imageUrl: bestCoverFor(ev),
     startsAt: new Date(ev.startDateTime),
     minPrice: min,
     currency,

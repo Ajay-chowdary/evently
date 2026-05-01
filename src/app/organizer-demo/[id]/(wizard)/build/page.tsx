@@ -46,6 +46,7 @@ export default function OrganizerWizardBuildPage() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const titleRef = useRef<HTMLInputElement | null>(null);
   const overviewRef = useRef<HTMLTextAreaElement | null>(null);
+  const replaceCoverRef = useRef(false);
 
   const base = event ?? {
     id,
@@ -104,8 +105,14 @@ export default function OrganizerWizardBuildPage() {
     reader.onload = () => {
       const src = typeof reader.result === "string" ? reader.result : "";
       if (!src) return;
-      if (!coverImage.trim()) setCoverImage(src);
-      else setGalleryImages((prev) => [...prev, src].slice(0, 5));
+      const current = coverImage.trim();
+      const hasRealCover = current.length > 0 && current !== EVENT_COVER_PLACEHOLDER;
+      if (replaceCoverRef.current || !hasRealCover) {
+        setCoverImage(src);
+        replaceCoverRef.current = false;
+      } else {
+        setGalleryImages((prev) => [...prev, src].slice(0, 5));
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -163,7 +170,10 @@ export default function OrganizerWizardBuildPage() {
                 variant="secondary"
                 size="sm"
                 className="absolute right-3 top-3 rounded-full shadow-md"
-                onClick={() => fileRef.current?.click()}
+                onClick={() => {
+                  replaceCoverRef.current = true;
+                  fileRef.current?.click();
+                }}
               >
                 <Upload className="h-4 w-4" /> Replace
               </Button>
