@@ -1,0 +1,2 @@
+{"sessionId":"e95258","location":"src/proxy.ts","message":"proxy_after_getToken","data":{"pathname":"/dashboard","hasToken":false,"hasSecret":true,"nodeEnv":"development","requestProtocol":"http:","secureCookie":false,"tokenError":null,"cookieHeaderLen":0,"hasSessionCookieHint":false},"timestamp":1774038313096,"hypothesisId":"H2"}
+{"sessionId":"e95258","location":"src/proxy.ts","message":"proxy_redirect_signin","data":{"pathname":"/dashboard"},"timestamp":1774038313100,"hypothesisId":"H3"}

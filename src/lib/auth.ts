@@ -55,10 +55,15 @@ function isDatabaseConnectionError(error: unknown) {
     return false;
   }
 
-  return (
-    error.name === "PrismaClientInitializationError" ||
-    error.message.includes("Can't reach database server") ||
-    error.message.includes("PrismaClientInitializationError")
+  const code = (error as { code?: string }).code;
+  if (code && ["P1001", "P1002", "P1008", "P1011", "P1017"].includes(code)) {
+    return true;
+  }
+
+  const message = error.message ?? "";
+  if (error.name === "PrismaClientInitializationError") return true;
+  return /Can't reach database server|Server has closed the connection|connection (?:reset|terminated|closed)|PrismaClientInitializationError/i.test(
+    message,
   );
 }
 
