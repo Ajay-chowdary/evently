@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { hasDatabaseUrl, hasSupabaseBrowserEnv } from "@/lib/env";
+import { isMockCatalog } from "@/lib/data-source";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type AppSession = {
@@ -56,13 +57,13 @@ function isDatabaseConnectionError(error: unknown) {
   }
 
   const code = (error as { code?: string }).code;
-  if (code && ["P1001", "P1002", "P1008", "P1011", "P1017"].includes(code)) {
+  if (code && ["P1001", "P1002", "P1008", "P1011", "P1017", "P2024"].includes(code)) {
     return true;
   }
 
   const message = error.message ?? "";
   if (error.name === "PrismaClientInitializationError") return true;
-  return /Can't reach database server|Server has closed the connection|connection (?:reset|terminated|closed)|PrismaClientInitializationError/i.test(
+  return /Can't reach database server|Server has closed the connection|connection (?:reset|terminated|closed)|connection pool|PrismaClientInitializationError/i.test(
     message,
   );
 }
@@ -112,7 +113,7 @@ async function syncAppUser(authUser: { id: string; email?: string; user_metadata
     return null;
   }
 
-  if (!hasDatabaseUrl()) {
+  if (!hasDatabaseUrl() || isMockCatalog()) {
     return fallbackUser;
   }
 
