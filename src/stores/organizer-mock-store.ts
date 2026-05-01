@@ -5,6 +5,14 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { getSeedEvents } from "@/mock-data/seed";
 import type { DomainEvent, TicketType } from "@/types/domain";
 
+const EMPTY_TICKETS: TicketType[] = [];
+
+let cachedSeedEvents: DomainEvent[] | null = null;
+function getCachedSeedEvents(): DomainEvent[] {
+  if (cachedSeedEvents === null) cachedSeedEvents = getSeedEvents();
+  return cachedSeedEvents;
+}
+
 type OrganizerMockState = {
   publishedEvents: DomainEvent[];
   ticketTypesByEventId: Record<string, TicketType[]>;
@@ -144,12 +152,12 @@ export const useOrganizerMockStore = create<OrganizerMockState>()(
       getEventById: (id) => {
         const fromStore = get().publishedEvents.find((e) => e.id === id);
         if (fromStore) return fromStore;
-        return getSeedEvents().find((e) => e.id === id) ?? null;
+        return getCachedSeedEvents().find((e) => e.id === id) ?? null;
       },
 
       getTicketTypesForEvent: (eventId) => {
         const fromStore = get().ticketTypesByEventId[eventId];
-        return fromStore ?? [];
+        return fromStore ?? EMPTY_TICKETS;
       },
 
       getExtraTicketTypes: () => {

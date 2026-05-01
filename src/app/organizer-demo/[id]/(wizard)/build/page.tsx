@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { EVENT_COVER_PLACEHOLDER, isProbablyImageUrl } from "@/lib/cover-image";
 import { toDatetimeLocalValue } from "@/lib/datetime-local";
 import { useOrganizerMockStore } from "@/stores/organizer-mock-store";
+import { getSeedEvents } from "@/mock-data/seed";
 import type { FAQItem } from "@/types/domain";
 
 function toIso(v: string): string | null {
@@ -34,8 +35,13 @@ export default function OrganizerWizardBuildPage() {
   const router = useRouter();
   const id = params.id;
 
-  const event = useOrganizerMockStore((s) => s.getEventById(id));
+  const publishedEvents = useOrganizerMockStore((s) => s.publishedEvents);
   const patchEvent = useOrganizerMockStore((s) => s.patchEvent);
+  const event = useMemo(() => {
+    const fromStore = publishedEvents.find((e) => e.id === id);
+    if (fromStore) return fromStore;
+    return getSeedEvents().find((e) => e.id === id) ?? null;
+  }, [publishedEvents, id]);
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const titleRef = useRef<HTMLInputElement | null>(null);

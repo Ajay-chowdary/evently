@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { Circle, Eye, MoreHorizontal } from "lucide-react";
 import { useParams, usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WizardEventCard } from "@/components/organizer/wizard/event-card";
 import { cn } from "@/lib/utils";
 import { useOrganizerMockStore } from "@/stores/organizer-mock-store";
+import { getSeedEvents } from "@/mock-data/seed";
 
 const steps = [
   {
@@ -39,10 +40,16 @@ export default function OrganizerWizardLayout({ children }: { children: React.Re
   const pathname = usePathname();
   const id = params.id;
 
-  const event = useOrganizerMockStore((s) => s.getEventById(id));
+  const publishedEvents = useOrganizerMockStore((s) => s.publishedEvents);
   const setEventStatus = useOrganizerMockStore((s) => s.setEventStatus);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  const event = useMemo(() => {
+    const fromStore = publishedEvents.find((e) => e.id === id);
+    if (fromStore) return fromStore;
+    return getSeedEvents().find((e) => e.id === id) ?? null;
+  }, [publishedEvents, id]);
 
   if (!mounted) {
     return <main className="p-8 text-zinc-500 dark:text-zinc-400">Loading event workspace...</main>;
