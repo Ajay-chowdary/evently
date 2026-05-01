@@ -79,6 +79,7 @@ export default function OrganizerWizardBuildPage() {
   const [locationDisplay, setLocationDisplay] = useState("");
 
   const previewMedia = useMemo(() => (isProbablyImageUrl(coverImage) ? coverImage : EVENT_COVER_PLACEHOLDER), [coverImage]);
+  const hasCustomCover = coverImage.trim().length > 0 && coverImage !== EVENT_COVER_PLACEHOLDER;
 
   if (!event) {
     return <main className="p-8 text-zinc-500 dark:text-zinc-400">Event not found.</main>;
@@ -139,14 +140,53 @@ export default function OrganizerWizardBuildPage() {
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-8 py-6">
       <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="relative overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
-          <Image src={previewMedia} alt="" width={1200} height={500} className="h-72 w-full object-cover" unoptimized />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-            <Button type="button" variant="secondary" className="rounded-md" onClick={() => fileRef.current?.click()}>
-              <Upload className="h-4 w-4" /> Upload photos and video
-            </Button>
-          </div>
+        <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
+          {hasCustomCover ? (
+            <>
+              <Image
+                src={previewMedia}
+                alt="Event cover preview"
+                fill
+                sizes="(max-width: 896px) 100vw, 896px"
+                className="object-cover"
+                unoptimized
+                priority
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="absolute right-3 top-3 rounded-full shadow-md"
+                onClick={() => fileRef.current?.click()}
+              >
+                <Upload className="h-4 w-4" /> Replace
+              </Button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-50 text-zinc-600 transition-colors hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm dark:bg-zinc-950">
+                <Upload className="h-5 w-5" />
+              </span>
+              <span className="text-sm font-semibold">Upload photos and video</span>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">PNG or JPG, up to 10 MB</span>
+            </button>
+          )}
         </div>
+
+        {galleryImages.length > 0 ? (
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {galleryImages.map((src, i) => (
+              <div key={`${src}-${i}`} className="relative aspect-square overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
+                <Image src={src} alt="" fill sizes="120px" className="object-cover" unoptimized />
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         <input ref={fileRef} type="file" className="hidden" accept="image/*" onChange={(e) => onFileChange(e.target.files?.[0] ?? null)} />
         <div className="mt-4 space-y-2">
           <Label htmlFor="coverImage">Cover image URL</Label>
