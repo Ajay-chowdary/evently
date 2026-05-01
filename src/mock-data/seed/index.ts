@@ -113,6 +113,17 @@ export const SEED_VENUES: Venue[] = [
 
 export const SEED_ORGANIZERS: Organizer[] = [
   {
+    id: "org-me",
+    name: "My Organization",
+    handle: "my-organization",
+    logo: null,
+    bio: "Hosted on Evently.",
+    verified: false,
+    contactEmail: "you@example.com",
+    socialLinks: {},
+    createdAt: "2024-01-01T00:00:00.000Z",
+  },
+  {
     id: "org-nightout",
     name: "Night Out Collective",
     handle: "nightout",

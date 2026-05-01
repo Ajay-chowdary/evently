@@ -107,6 +107,7 @@ export interface DomainEvent {
   presenterLine: string | null;
   tagline: string | null;
   heroSubtitle: string | null;
+  customOrganizerName?: string | null;
 }
 
 export interface TicketType {

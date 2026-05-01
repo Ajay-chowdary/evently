@@ -26,7 +26,7 @@ export default function OrganizerWizardPublishPage() {
   const [bannerOpen, setBannerOpen] = useState(true);
   const [eventType, setEventType] = useState("In person");
   const [category, setCategory] = useState(event?.category ?? "Music");
-  const [organizerName, setOrganizerName] = useState(event?.presenterLine ?? "");
+  const [organizerName, setOrganizerName] = useState(event?.customOrganizerName ?? "");
   const [keywords, setKeywords] = useState((event?.tags ?? []).join(", "));
   const [visibility, setVisibility] = useState<"public" | "private">(
     event?.visibility === "private" ? "private" : "public",
@@ -49,7 +49,7 @@ export default function OrganizerWizardPublishPage() {
     patchEvent(id, {
       category,
       categorySlug: category.toLowerCase().replace(/\s+/g, "-"),
-      presenterLine: organizerName.trim() || null,
+      customOrganizerName: organizerName.trim() || null,
       tags,
       tagline: eventType,
     });

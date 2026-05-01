@@ -178,8 +178,10 @@ export function getMockEventBySlug(
   if (!options?.includeDraft && ev.status === "draft") return null;
   if (ev.visibility === "private") return null;
   const venue = venueMap.get(ev.venueId);
-  const organizer = organizerMap.get(ev.organizerId);
-  if (!venue || !organizer) return null;
+  const baseOrganizer = organizerMap.get(ev.organizerId);
+  if (!venue || !baseOrganizer) return null;
+  const customName = ev.customOrganizerName?.trim();
+  const organizer = customName ? { ...baseOrganizer, name: customName } : baseOrganizer;
   const ticketTypes = mergedTicketTypesForEvent(ev.id, extraTicketTypes);
   return { ...ev, venue, organizer, ticketTypes };
 }

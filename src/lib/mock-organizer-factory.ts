@@ -3,7 +3,7 @@ import type { DomainEvent } from "@/types/domain";
 import { uniqueSlugForTitle } from "@/lib/slug-client";
 import { getSeedEventsMerged } from "@/lib/mock-db/catalog";
 
-const DEFAULT_ORG = "org-nightout";
+const DEFAULT_ORG = "org-me";
 
 export function venueIdForCity(city: string): string {
   const v = SEED_VENUES.find((x) => x.city.toLowerCase() === city.trim().toLowerCase());
