@@ -7,7 +7,7 @@ function isPostgresUrl(value: string) {
 }
 
 export const env = {
-  appUrl: trim(process.env.NEXT_PUBLIC_APP_URL),
+  appUrl: trim(process.env.NEXT_PUBLIC_APP_URL) || (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}` : "") || (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : "http://localhost:3000"),
   databaseUrl: trim(process.env.DATABASE_URL),
   directUrl: trim(process.env.DIRECT_URL),
   supabaseUrl: trim(process.env.NEXT_PUBLIC_SUPABASE_URL),
