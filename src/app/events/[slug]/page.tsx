@@ -17,17 +17,22 @@ import { SaveEventButton } from "@/components/save-event-button";
 import { ShareEventButton } from "@/components/share-event-button";
 import { auth } from "@/lib/auth";
 import { eventGalleryUrls, getEventBySlug } from "@/lib/events";
+import { shouldUseSupabasePublicEvents } from "@/lib/env";
+import { getPublicEventDetailBySlugSb } from "@/lib/supabase/queries/events-public";
 import { getMockEventBySlug } from "@/lib/mock-db/catalog";
 import { isMockCatalog, loadSimilarForDetail } from "@/lib/data-source";
 import { prisma } from "@/lib/db";
 import type { Event } from "@/generated/prisma/client";
 import type { Metadata } from "next";
+import type { PublicEventListItem } from "@/types/domain";
 
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  if (isMockCatalog()) {
+  const useSbPublicEvents = shouldUseSupabasePublicEvents();
+
+  if (isMockCatalog() && !useSbPublicEvents) {
     const e = getMockEventBySlug(slug, [], []);
     if (!e) return { title: "Event" };
     return {
@@ -40,6 +45,25 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       },
     };
   }
+
+  if (useSbPublicEvents) {
+    try {
+      const sbEvent = await getPublicEventDetailBySlugSb(slug);
+      if (!sbEvent) return { title: "Event not found" };
+      return {
+        title: sbEvent.title,
+        description: sbEvent.description.slice(0, 160),
+        openGraph: {
+          title: sbEvent.title,
+          description: sbEvent.description.slice(0, 200),
+          images: [{ url: sbEvent.imageUrl }],
+        },
+      };
+    } catch {
+      return { title: "Event" };
+    }
+  }
+
   const event = await getEventBySlug(slug);
   if (!event) return { title: "Event not found" };
   return {
@@ -84,14 +108,40 @@ function formatCurrency(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
 }
 
+function formatSimilarRowPrice(ev: Event | PublicEventListItem): string {
+  const pub = ev as PublicEventListItem;
+  if ("minPrice" in pub && typeof pub.minPrice === "number") {
+    return pub.minPrice === 0 ? "Free" : formatCurrency(pub.minPrice, pub.currency ?? "USD");
+  }
+  const e = ev as Event;
+  return !e.ticketPrice || e.ticketPrice === 0
+    ? "Free"
+    : formatCurrency(e.ticketPrice, e.ticketCurrency ?? "USD");
+}
+
+function similarVenueLine(ev: Event | PublicEventListItem): string {
+  if ("venueName" in ev && ev.venueName) return `${ev.venueName} · ${ev.city}`;
+  return ev.city;
+}
+
 export default async function EventDetailPage({ params }: Props) {
   const { slug } = await params;
+  const useSbPublicEvents = shouldUseSupabasePublicEvents();
 
-  if (isMockCatalog()) {
+  if (isMockCatalog() && !useSbPublicEvents) {
     return <EventMockDetailClient slug={slug} />;
   }
 
-  const event = await getEventBySlug(slug);
+  let event = null as Awaited<ReturnType<typeof getEventBySlug>>;
+  if (useSbPublicEvents) {
+    try {
+      event = await getPublicEventDetailBySlugSb(slug);
+    } catch {
+      notFound();
+    }
+  } else {
+    event = await getEventBySlug(slug);
+  }
   if (!event) notFound();
 
   const session = await auth();
@@ -344,33 +394,31 @@ export default async function EventDetailPage({ params }: Props) {
                 <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">You might also like...</h2>
                 <div className="mt-6 space-y-0">
                   {similar.slice(0, 4).map((ev) => {
-                    const e = ev as Event;
-                    const evStartsAt = e.startsAt instanceof Date ? e.startsAt : new Date(e.startsAt);
+                    const evStartsAt =
+                      ev.startsAt instanceof Date ? ev.startsAt : new Date(ev.startsAt);
                     return (
                       <Link
-                        key={e.id}
-                        href={`/events/${e.slug}`}
+                        key={ev.id}
+                        href={`/events/${ev.slug}`}
                         className="flex gap-4 border-b border-zinc-100 py-4 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900/50"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-zinc-900 dark:text-zinc-50">{e.title}</p>
+                          <p className="font-semibold text-zinc-900 dark:text-zinc-50">{ev.title}</p>
                           <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
                             {formatShortDate(evStartsAt)} · {formatShortTime(evStartsAt)}
                           </p>
                           <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                            {e.venueName ? `${e.venueName} · ` : ""}{e.city}
+                            {similarVenueLine(ev)}
                           </p>
                           <p className="mt-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                            {!e.ticketPrice || e.ticketPrice === 0
-                              ? "Free"
-                              : new Intl.NumberFormat("en-US", { style: "currency", currency: e.ticketCurrency ?? "USD" }).format(e.ticketPrice)}
+                            {formatSimilarRowPrice(ev)}
                           </p>
                         </div>
-                        {e.imageUrl && (
+                        {"imageUrl" in ev && ev.imageUrl ? (
                           <div className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-900">
-                            <Image src={e.imageUrl} alt="" fill className="object-cover" unoptimized />
+                            <Image src={ev.imageUrl} alt="" fill className="object-cover" unoptimized />
                           </div>
-                        )}
+                        ) : null}
                       </Link>
                     );
                   })}

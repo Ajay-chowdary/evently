@@ -47,3 +47,13 @@ export function hasStripeEnv() {
 export function hasResendEnv() {
   return Boolean(env.resendApiKey);
 }
+
+/**
+ * When NEXT_PUBLIC_EVENTS_SOURCE=supabase and Supabase URL plus publishable key exist,
+ * public /events and /events/[slug] read from Postgres via Supabase JS (RLS), even if
+ * NEXT_PUBLIC_USE_MOCK_CATALOG is true for the rest of the app.
+ */
+export function shouldUseSupabasePublicEvents(): boolean {
+  const src = trim(process.env.NEXT_PUBLIC_EVENTS_SOURCE).toLowerCase();
+  return src === "supabase" && hasSupabaseBrowserEnv();
+}

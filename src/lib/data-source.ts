@@ -3,6 +3,14 @@ import "server-only";
 import type { Event } from "@/generated/prisma/client";
 import type { PublicEventListItem } from "@/types/domain";
 import {
+  getPublicEventDetailBySlugSb,
+  loadDistinctCategoriesSb,
+  loadDistinctCitiesSb,
+  loadPublishedEventsForBrowseSb,
+  loadSimilarEventsSb,
+  type SupabaseBrowseFilters,
+} from "@/lib/supabase/queries/events-public";
+import {
   getMockCategories,
   getMockDistinctCities,
   getMockEventBySlug,
@@ -23,7 +31,7 @@ import {
   type EventFilters,
   type PublicEventDetail,
 } from "@/lib/events";
-import { hasDatabaseUrl } from "@/lib/env";
+import { hasDatabaseUrl, shouldUseSupabasePublicEvents } from "@/lib/env";
 
 let forceMockCatalog = false;
 
@@ -34,6 +42,20 @@ export type UnifiedEventFilters = EventFilters & {
   maxPrice?: number;
   sort?: "relevance" | "date" | "price";
 };
+
+function toSupabaseBrowseFilters(f: UnifiedEventFilters): SupabaseBrowseFilters {
+  return {
+    q: f.q,
+    city: f.city,
+    category: f.category,
+    from: f.from,
+    to: f.to,
+    type: f.type,
+    minPrice: f.minPrice,
+    maxPrice: f.maxPrice,
+    sort: f.sort,
+  };
+}
 
 export function isMockCatalog(): boolean {
   return process.env.NEXT_PUBLIC_USE_MOCK_CATALOG === "true" || !hasDatabaseUrl() || forceMockCatalog;
@@ -68,6 +90,14 @@ export async function loadEventsForBrowse(
   filters: UnifiedEventFilters,
   extraMockEvents: DomainEvent[] = [],
 ): Promise<PublicEventListItem[] | Event[]> {
+  if (shouldUseSupabasePublicEvents()) {
+    try {
+      return await loadPublishedEventsForBrowseSb(toSupabaseBrowseFilters(filters));
+    } catch {
+      return [];
+    }
+  }
+
   if (isMockCatalog()) {
     const mockFilters: MockEventFilters = {
       q: filters.q,
@@ -116,6 +146,16 @@ export async function loadEventDetailBySlug(
   slug: string,
   extraMockEvents: DomainEvent[] = [],
 ): Promise<{ mode: "mock"; event: CatalogEventDetail } | { mode: "prisma"; event: PublicEventDetail } | null> {
+  if (shouldUseSupabasePublicEvents()) {
+    try {
+      const event = await getPublicEventDetailBySlugSb(slug);
+      if (!event) return null;
+      return { mode: "prisma", event };
+    } catch {
+      return null;
+    }
+  }
+
   if (isMockCatalog()) {
     const event = getMockEventBySlug(slug, extraMockEvents);
     if (!event) return null;
@@ -154,6 +194,14 @@ export async function loadSimilarForDetail(
   take: number,
   extraMockEvents: DomainEvent[] = [],
 ): Promise<PublicEventListItem[] | Event[]> {
+  if (shouldUseSupabasePublicEvents()) {
+    try {
+      return await loadSimilarEventsSb(category, excludeId, take);
+    } catch {
+      return [];
+    }
+  }
+
   if (isMockCatalog()) {
     return getMockRelatedPublic(category, excludeId, take, extraMockEvents);
   }
@@ -166,6 +214,14 @@ export async function loadSimilarForDetail(
 }
 
 export async function loadDistinctCities(extraMockEvents: DomainEvent[] = []): Promise<string[]> {
+  if (shouldUseSupabasePublicEvents()) {
+    try {
+      return await loadDistinctCitiesSb();
+    } catch {
+      return [];
+    }
+  }
+
   if (isMockCatalog()) {
     return getMockDistinctCities(extraMockEvents);
   }
@@ -178,6 +234,21 @@ export async function loadDistinctCities(extraMockEvents: DomainEvent[] = []): P
 }
 
 export async function loadCategoriesForDiscovery() {
+  if (shouldUseSupabasePublicEvents()) {
+    try {
+      const rows = await loadDistinctCategoriesSb();
+      return rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        icon: null,
+        description: "",
+      }));
+    } catch {
+      return [];
+    }
+  }
+
   if (isMockCatalog()) {
     return getMockCategories();
   }

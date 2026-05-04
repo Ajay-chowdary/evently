@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Event } from "@/generated/prisma/client";
+import { shouldUseSupabasePublicEvents } from "@/lib/env";
 import { isMockCatalog, loadCategoriesForDiscovery, loadDistinctCities, loadEventsForBrowse } from "@/lib/data-source";
 import type { MockEventFilters } from "@/lib/mock-db/catalog";
 import type { UnifiedEventFilters } from "@/lib/data-source";
@@ -48,6 +49,7 @@ export default async function EventsPage({
     sortRaw === "price" || sortRaw === "relevance" || sortRaw === "date" ? sortRaw : "date";
 
   const requestedMock = isMockCatalog();
+  const useSbPublicEvents = shouldUseSupabasePublicEvents();
 
   const unified: UnifiedEventFilters = {
     q,
@@ -68,9 +70,10 @@ export default async function EventsPage({
   ]);
 
   const isMock =
-    requestedMock ||
-    ("minPrice" in (events[0] ?? {})) ||
-    categoryRows.some((categoryRow) => categoryRow.id.startsWith("cat_"));
+    !useSbPublicEvents &&
+    (requestedMock ||
+      ("minPrice" in (events[0] ?? {})) ||
+      categoryRows.some((categoryRow) => categoryRow.id.startsWith("cat_")));
 
   const prismaPublishedForMock: Event[] = [];
 
