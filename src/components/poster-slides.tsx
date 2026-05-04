@@ -5,7 +5,16 @@ import { useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const slides = [
+interface Slide {
+  code: string;
+  title: string;
+  bullets: string[];
+  className: string;
+  index: string;
+  cta?: { href: string; label: string };
+}
+
+const slides: Slide[] = [
   {
     code: "EV",
     title: "Discover what is on near you.",
@@ -34,7 +43,13 @@ const slides = [
   },
 ];
 
-function SlideContent({ slide, i }: { slide: (typeof slides)[number]; i: number }) {
+const getCardSectionClass = (className: string) =>
+  cn(
+    "relative flex min-h-[min(calc(100dvh-5.5rem),680px)] flex-col justify-center overflow-hidden rounded-3xl px-6 py-20 shadow-2xl ring-1 ring-black/10 sm:px-12 lg:px-16 dark:ring-white/10",
+    className,
+  );
+
+function SlideContent({ slide, i }: { slide: Slide; i: number }) {
   return (
     <>
       <div className="pointer-events-none absolute left-1/2 top-8 -translate-x-1/2 text-xs font-medium uppercase tracking-[0.2em] opacity-80">
@@ -84,19 +99,13 @@ function SlideContent({ slide, i }: { slide: (typeof slides)[number]; i: number 
 export function PosterSlides() {
   const reduceMotion = useReducedMotion();
 
-  const cardSectionClass = (slide: (typeof slides)[number]) =>
-    cn(
-      "relative flex min-h-[min(calc(100dvh-5.5rem),680px)] flex-col justify-center overflow-hidden rounded-3xl px-6 py-20 shadow-2xl ring-1 ring-black/10 sm:px-12 lg:px-16 dark:ring-white/10",
-      slide.className,
-    );
-
   if (reduceMotion) {
     return (
       <div className="flex flex-col gap-6 bg-zinc-200/90 px-4 pb-10 pt-2 dark:bg-zinc-950 sm:px-6">
         {slides.map((slide, i) => (
           <section
             key={slide.index}
-            className={cardSectionClass(slide)}
+            className={getCardSectionClass(slide.className)}
             aria-labelledby={`slide-title-${i}`}
           >
             <SlideContent slide={slide} i={i} />
@@ -115,7 +124,7 @@ export function PosterSlides() {
           style={{ zIndex: (i + 1) * 10 }}
         >
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <section className={cardSectionClass(slide)} aria-labelledby={`slide-title-${i}`}>
+            <section className={getCardSectionClass(slide.className)} aria-labelledby={`slide-title-${i}`}>
               <SlideContent slide={slide} i={i} />
             </section>
           </div>

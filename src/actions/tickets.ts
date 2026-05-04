@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { sendTicketConfirmationEmail } from "@/lib/email";
 
 function revalidatePathsForEvent(slug: string) {
   revalidatePath(`/events/${slug}`);
@@ -108,6 +109,8 @@ export async function claimTicket(
     select: { email: true, name: true },
   });
 
+  let firstTicketId: string | null = null;
+
   try {
     await prisma.$transaction(async (tx) => {
       const inventoryUpdate = await tx.ticketType.updateMany({
@@ -152,7 +155,7 @@ export async function claimTicket(
       });
 
       for (let index = 0; index < quantity; index += 1) {
-        await tx.ticket.create({
+        const t = await tx.ticket.create({
           data: {
             referenceCode: makeReference("TK"),
             bookingId: booking.id,
@@ -166,6 +169,7 @@ export async function claimTicket(
             qrCodeValue: crypto.randomUUID(),
           },
         });
+        if (index === 0) firstTicketId = t.id;
       }
     });
   } catch (error) {
@@ -174,6 +178,21 @@ export async function claimTicket(
     }
 
     throw error;
+  }
+
+  if (firstTicketId && event.title) {
+    // Send Resend email in the background
+    const toEmail = attendee?.email || session.user.email;
+    const toName = attendee?.name?.trim() || attendee?.email || "Guest";
+    if (toEmail) {
+      sendTicketConfirmationEmail({
+        toEmail,
+        attendeeName: toName,
+        eventTitle: event.title,
+        ticketQuantity: quantity,
+        ticketId: firstTicketId,
+      }).catch(console.error);
+    }
   }
 
   revalidatePathsForEvent(event.slug);

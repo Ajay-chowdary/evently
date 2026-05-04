@@ -7,6 +7,38 @@ import { Prisma } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ensureUniqueEventSlug } from "@/lib/slug";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+async function uploadDataUrlToSupabase(dataUrl: string, prefix: string): Promise<string> {
+  if (!dataUrl.startsWith("data:image/")) return dataUrl; // Not a data URL, return as is
+
+  const supabase = await createSupabaseServerClient();
+  
+  const [header, base64Data] = dataUrl.split(",");
+  if (!base64Data) return dataUrl;
+  
+  const mimeTypeMatch = header.match(/data:(.*?);/);
+  const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : "image/jpeg";
+  const ext = mimeType.split("/")[1] || "jpg";
+  
+  const buffer = Buffer.from(base64Data, "base64");
+  const fileName = `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${ext}`;
+  
+  const { data, error } = await supabase.storage
+    .from("event-posters")
+    .upload(fileName, buffer, {
+      contentType: mimeType,
+      upsert: false,
+    });
+    
+  if (error) {
+    console.error("Supabase upload error:", error);
+    return dataUrl; // fallback to data url if upload fails
+  }
+  
+  const { data: publicUrlData } = supabase.storage.from("event-posters").getPublicUrl(fileName);
+  return publicUrlData.publicUrl;
+}
 
 function parseGalleryExtrasJson(raw: string): string[] {
   try {
@@ -211,7 +243,16 @@ export async function createEvent(_prev: EventActionState, formData: FormData): 
     }
   }
 
-  const mergedGallery = mergeGalleryUrls(normalized.imageUrl, normalized.galleryExtras);
+  const mergedGalleryRaw = mergeGalleryUrls(normalized.imageUrl, normalized.galleryExtras);
+
+  // Upload any data URLs to Supabase Storage
+  const imageUrl = await uploadDataUrlToSupabase(normalized.imageUrl, "cover");
+  const organizerLogoUrl = normalized.organizerLogoUrl
+    ? await uploadDataUrlToSupabase(normalized.organizerLogoUrl, "logo")
+    : null;
+  const mergedGallery = await Promise.all(
+    mergedGalleryRaw.map((url, i) => uploadDataUrlToSupabase(url, `slide-${i}`))
+  );
 
   const slug = await ensureUniqueEventSlug(normalized.title);
 
@@ -223,12 +264,12 @@ export async function createEvent(_prev: EventActionState, formData: FormData): 
       region: normalized.region ?? null,
       venueName: normalized.venueName ?? null,
       category: normalized.category,
-      imageUrl: normalized.imageUrl,
+      imageUrl: imageUrl,
       galleryUrls: mergedGallery.length > 1 ? mergedGallery : Prisma.JsonNull,
       tagline: normalized.tagline ?? null,
       heroSubtitle: normalized.heroSubtitle ?? null,
       presenterLine: normalized.presenterLine ?? null,
-      organizerLogoUrl: normalized.organizerLogoUrl ?? null,
+      organizerLogoUrl: organizerLogoUrl,
       ticketPrice: normalized.ticketPrice ?? 0,
       ticketCurrency: normalized.ticketCurrency ?? "USD",
       ticketNote: normalized.ticketNote ?? null,
@@ -300,7 +341,16 @@ export async function updateEvent(_prev: EventActionState, formData: FormData): 
     slug = await ensureUniqueEventSlug(normalized.title, existing.id);
   }
 
-  const mergedGallery = mergeGalleryUrls(normalized.imageUrl, normalized.galleryExtras);
+  const mergedGalleryRaw = mergeGalleryUrls(normalized.imageUrl, normalized.galleryExtras);
+
+  // Upload any data URLs to Supabase Storage
+  const imageUrl = await uploadDataUrlToSupabase(normalized.imageUrl, "cover");
+  const organizerLogoUrl = normalized.organizerLogoUrl
+    ? await uploadDataUrlToSupabase(normalized.organizerLogoUrl, "logo")
+    : null;
+  const mergedGallery = await Promise.all(
+    mergedGalleryRaw.map((url, i) => uploadDataUrlToSupabase(url, `slide-${i}`))
+  );
 
   await prisma.event.update({
     where: { id },
@@ -311,12 +361,12 @@ export async function updateEvent(_prev: EventActionState, formData: FormData): 
       region: normalized.region ?? null,
       venueName: normalized.venueName ?? null,
       category: normalized.category,
-      imageUrl: normalized.imageUrl,
+      imageUrl: imageUrl,
       galleryUrls: mergedGallery.length > 1 ? mergedGallery : Prisma.JsonNull,
       tagline: normalized.tagline ?? null,
       heroSubtitle: normalized.heroSubtitle ?? null,
       presenterLine: normalized.presenterLine ?? null,
-      organizerLogoUrl: normalized.organizerLogoUrl ?? null,
+      organizerLogoUrl: organizerLogoUrl,
       ticketPrice: normalized.ticketPrice ?? 0,
       ticketCurrency: normalized.ticketCurrency ?? "USD",
       ticketNote: normalized.ticketNote ?? null,

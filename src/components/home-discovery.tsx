@@ -78,25 +78,26 @@ export async function HomeDiscovery() {
           <p className="mb-3 text-center text-sm font-medium text-zinc-500 dark:text-zinc-400">Categories</p>
           <div className="flex justify-center overflow-x-auto pb-2">
             <div className="flex min-w-max gap-4 px-1">
-            {categories.map((cat) => (
-              <Link
-                key={cat.id}
-                href={
-                  isMock
-                    ? `/events/category/${encodeURIComponent(cat.slug)}`
-                    : `/events?category=${encodeURIComponent(cat.name)}`
-                }
-                className="group flex w-[96px] flex-col items-center gap-2 text-center"
-              >
-                <span className="flex h-20 w-20 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-                  {(() => {
-                    const Icon = categoryIcons[(cat.icon as keyof typeof categoryIcons) ?? "Music2"] ?? Music2;
-                    return <Icon className="h-8 w-8" aria-hidden />;
-                  })()}
-                </span>
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{cat.name}</span>
-              </Link>
-            ))}
+            {categories.map((cat) => {
+              const Icon = categoryIcons[(cat.icon as keyof typeof categoryIcons) ?? "Music2"] ?? Music2;
+              
+              return (
+                <Link
+                  key={cat.id}
+                  href={
+                    isMock
+                      ? `/events/category/${encodeURIComponent(cat.slug)}`
+                      : `/events?category=${encodeURIComponent(cat.name)}`
+                  }
+                  className="group flex w-[96px] flex-col items-center gap-2 text-center"
+                >
+                  <span className="flex h-20 w-20 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+                    <Icon className="h-8 w-8" aria-hidden />
+                  </span>
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{cat.name}</span>
+                </Link>
+              );
+            })}
             </div>
           </div>
         </div>

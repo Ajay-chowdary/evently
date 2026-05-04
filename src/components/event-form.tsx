@@ -371,7 +371,7 @@ export function EventForm(props: Props) {
                         Add a photo or image URL
                       </Label>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Paste a link, or upload a file (saved on the event record as a data URL for this MVP).
+                        Paste a link, or upload a file.
                       </p>
                       <Input
                         id="imageUrl"
@@ -528,7 +528,7 @@ export function EventForm(props: Props) {
                   <div className="space-y-2">
                     <Label htmlFor="organizerLogoUrl">Organizer logo (optional)</Label>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Paste a link, or upload a file (stored as a data URL for this MVP).
+                      Paste a link, or upload a file.
                     </p>
                     <Input
                       id="organizerLogoUrl"
