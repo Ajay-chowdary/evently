@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
+import { clientIp, rateLimit } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 
@@ -137,6 +138,13 @@ async function expirePendingBooking(session: Stripe.Checkout.Session) {
 export async function POST(request: NextRequest) {
   if (!stripe || !env.stripeWebhookSecret) {
     return NextResponse.json({ error: "Stripe webhook is not configured." }, { status: 503 });
+  }
+
+  // Backstop in case an attacker hammers the endpoint with bad signatures —
+  // signature verification is the primary defense.
+  const rl = await rateLimit("webhook").limit(`ip:${clientIp(request.headers)}`);
+  if (!rl.success) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 });
   }
 
   const signature = request.headers.get("stripe-signature");

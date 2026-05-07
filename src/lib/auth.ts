@@ -68,43 +68,54 @@ function isDatabaseConnectionError(error: unknown) {
   );
 }
 
-async function ensureOrganizerForUser(
-  prisma: Awaited<typeof import("@/lib/db")>["prisma"],
-  user: AuthSyncUser,
-) {
-  const existingOrganizer = await prisma.organizer.findUnique({
-    where: { id: user.id },
+/**
+ * Lazily creates the Organizer row for the calling user (and bumps role) the
+ * first time they take an organizer-only action (e.g. createEvent). Call this
+ * at the top of any server action / route that requires organizer-owned writes.
+ *
+ * NOTE: this is intentionally *not* called from `auth()` — we don't want every
+ * signed-in attendee to silently become an organizer.
+ */
+export async function ensureCallerIsOrganizer(): Promise<AppSession> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Authentication required.");
+  }
+
+  const { prisma } = await import("@/lib/db");
+
+  const existing = await prisma.organizer.findUnique({
+    where: { id: session.user.id },
     select: { id: true },
   });
 
-  if (!existingOrganizer) {
-    const baseHandle = organizerHandleSeed(user.email, user.name);
+  if (!existing) {
+    const baseHandle = organizerHandleSeed(session.user.email, session.user.name);
     let handle = baseHandle;
     let suffix = 1;
-
     while (await prisma.organizer.findUnique({ where: { handle }, select: { id: true } })) {
       suffix += 1;
       handle = `${baseHandle}-${suffix}`;
     }
-
     await prisma.organizer.create({
       data: {
-        id: user.id,
+        id: session.user.id,
         handle,
-        name: user.name ?? user.email.split("@")[0] ?? "Evently organizer",
-        contactEmail: user.email,
+        name: session.user.name ?? session.user.email.split("@")[0] ?? "Evently organizer",
+        contactEmail: session.user.email,
       },
     });
   }
 
-  if (user.role !== "ORGANIZER" && user.role !== "ADMIN") {
-    return prisma.user.update({
-      where: { id: user.id },
+  if (session.user.role !== "ORGANIZER" && session.user.role !== "ADMIN") {
+    const updated = await prisma.user.update({
+      where: { id: session.user.id },
       data: { role: "ORGANIZER" },
     });
+    return { user: { ...session.user, role: updated.role } };
   }
 
-  return user;
+  return session;
 }
 
 async function syncAppUser(authUser: { id: string; email?: string; user_metadata?: Record<string, unknown> }) {
@@ -136,7 +147,7 @@ async function syncAppUser(authUser: { id: string; email?: string; user_metadata
           name: preferredName ?? existingByAuthUserId.name,
         },
       });
-      return ensureOrganizerForUser(prisma, user);
+      return user;
     }
 
     const existingByEmail = await prisma.user.findUnique({
@@ -151,7 +162,7 @@ async function syncAppUser(authUser: { id: string; email?: string; user_metadata
           name: preferredName ?? existingByEmail.name,
         },
       });
-      return ensureOrganizerForUser(prisma, user);
+      return user;
     }
 
     const user = await prisma.user.create({
@@ -161,7 +172,7 @@ async function syncAppUser(authUser: { id: string; email?: string; user_metadata
         name: preferredName,
       },
     });
-    return ensureOrganizerForUser(prisma, user);
+    return user;
   } catch (error) {
     if (isDatabaseConnectionError(error)) {
       return fallbackUser;

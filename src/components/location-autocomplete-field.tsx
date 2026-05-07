@@ -7,11 +7,23 @@ import { Label } from "@/components/ui/label";
 import type { LocationSuggestion } from "@/lib/location/types";
 import { cn } from "@/lib/utils";
 
+export type ResolvedLocation = {
+  venueName: string;
+  city: string;
+  region: string;
+  country?: string;
+  addressLine1?: string;
+  postalCode?: string;
+  latitude?: number;
+  longitude?: number;
+  label?: string;
+};
+
 type Props = {
   id?: string;
   label: string;
   defaultDisplay: string;
-  onResolved: (next: { venueName: string; city: string; region: string }) => void;
+  onResolved: (next: ResolvedLocation) => void;
 };
 
 export function LocationAutocompleteField({ id, label, defaultDisplay, onResolved }: Props) {
@@ -78,7 +90,17 @@ export function LocationAutocompleteField({ id, label, defaultDisplay, onResolve
           const data = (await res.json()) as { detail?: LocationSuggestion | null };
           const d = data.detail;
           if (d) {
-            onResolved({ venueName: d.venueName, city: d.city, region: d.region });
+            onResolved({
+              venueName: d.venueName,
+              city: d.city,
+              region: d.region,
+              country: d.country,
+              addressLine1: d.addressLine1,
+              postalCode: d.postalCode,
+              latitude: d.latitude,
+              longitude: d.longitude,
+              label: d.label,
+            });
             setDraft(d.label);
             committedRef.current = d.label;
             setLoading(false);
@@ -89,7 +111,17 @@ export function LocationAutocompleteField({ id, label, defaultDisplay, onResolve
         }
         setLoading(false);
       }
-      onResolved({ venueName: s.venueName, city: s.city, region: s.region });
+      onResolved({
+        venueName: s.venueName,
+        city: s.city,
+        region: s.region,
+        country: s.country,
+        addressLine1: s.addressLine1,
+        postalCode: s.postalCode,
+        latitude: s.latitude,
+        longitude: s.longitude,
+        label: s.label,
+      });
       setDraft(s.label);
       committedRef.current = s.label;
     },
@@ -128,6 +160,8 @@ export function LocationAutocompleteField({ id, label, defaultDisplay, onResolve
               venueName: venueGuess,
               city: cityGuess || t,
               region: parts.length > 1 ? parts[parts.length - 1] ?? "" : "",
+              addressLine1: t,
+              label: t,
             });
             committedRef.current = t;
           }}
@@ -165,31 +199,37 @@ export function LocationAutocompleteField({ id, label, defaultDisplay, onResolve
           />
         ) : null}
       </div>
-      {open && suggestions.length > 0 ? (
-        <ul
-          id={listId}
-          role="listbox"
-          className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-zinc-200 bg-white py-1 text-zinc-900 shadow-lg dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
-        >
-          {suggestions.map((s, i) => (
-            <li key={s.id} role="presentation">
-              <button
-                type="button"
-                role="option"
-                aria-selected={i === active}
-                className={cn(
-                  "flex w-full px-3 py-2.5 text-left text-sm",
-                  i === active ? "bg-zinc-100 dark:bg-zinc-900" : "hover:bg-zinc-50 dark:hover:bg-zinc-900/60",
-                )}
-                onMouseEnter={() => setActive(i)}
-                onMouseDown={(ev) => ev.preventDefault()}
-                onClick={() => void onSelect(s)}
-              >
-                {s.label}
-              </button>
-            </li>
-          ))}
-        </ul>
+      {open && draft.trim() ? (
+        suggestions.length > 0 ? (
+          <ul
+            id={listId}
+            role="listbox"
+            className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-zinc-200 bg-white py-1 text-zinc-900 shadow-lg dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+          >
+            {suggestions.map((s, i) => (
+              <li key={s.id} role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={i === active}
+                  className={cn(
+                    "flex w-full px-3 py-2.5 text-left text-sm",
+                    i === active ? "bg-zinc-100 dark:bg-zinc-900" : "hover:bg-zinc-50 dark:hover:bg-zinc-900/60",
+                  )}
+                  onMouseEnter={() => setActive(i)}
+                  onMouseDown={(ev) => ev.preventDefault()}
+                  onClick={() => void onSelect(s)}
+                >
+                  {s.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : !loading ? (
+          <div className="absolute z-50 mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-500 shadow-lg dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
+            No matches. Press Tab to use what you typed.
+          </div>
+        ) : null
       ) : null}
     </div>
   );

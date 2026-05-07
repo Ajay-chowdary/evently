@@ -90,6 +90,18 @@ export interface DomainEvent {
   venueId: string;
   /** When set, overrides venue map city for browse cards and city filters (user-entered location). */
   listingCity?: string | null;
+  /** When set, overrides the seed Venue entirely with a user-chosen address (organizer wizard flow). */
+  listingVenue?: {
+    name: string;
+    addressLine1: string;
+    addressLine2?: string | null;
+    city: string;
+    region: string;
+    country: string;
+    postalCode?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null;
   organizerId: string;
   status: EventStatus;
   featured: boolean;

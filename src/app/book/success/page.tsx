@@ -26,14 +26,9 @@ export default async function BookSuccessPage({ searchParams }: { searchParams: 
         })
       : null;
 
-  const ticketsHref =
-    bookingRecord?.id ? `/bookings/${bookingRecord.id}` : mockMode ? "/bookings" : "/account/tickets";
+  const ticketsHref = bookingRecord?.id ? `/bookings/${bookingRecord.id}` : "/bookings";
   const ticketsLabel =
-    bookingRecord?.status === "PENDING_PAYMENT"
-      ? "View booking status"
-      : mockMode
-        ? "View my bookings"
-        : "View my tickets";
+    bookingRecord?.status === "PENDING_PAYMENT" ? "View booking status" : "View my tickets";
   const title = bookingRecord?.status === "PENDING_PAYMENT" ? "Payment received" : "You are booked";
   const effectiveRef = bookingRecord?.referenceCode ?? ref;
 

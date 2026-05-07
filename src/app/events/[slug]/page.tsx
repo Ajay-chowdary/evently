@@ -137,12 +137,19 @@ export default async function EventDetailPage({ params }: Props) {
     try {
       event = await getPublicEventDetailBySlugSb(slug);
     } catch {
+      // Unexpected error reading from Supabase. In mock mode, fall through to
+      // the client mock detail (organizer-demo localStorage events). In prod,
+      // surface a 404 rather than silently rendering an empty mock page.
+      if (isMockCatalog()) return <EventMockDetailClient slug={slug} />;
       notFound();
     }
   } else {
     event = await getEventBySlug(slug);
   }
-  if (!event) notFound();
+  if (!event) {
+    if (isMockCatalog()) return <EventMockDetailClient slug={slug} />;
+    notFound();
+  }
 
   const session = await auth();
   let initialSaved = false;

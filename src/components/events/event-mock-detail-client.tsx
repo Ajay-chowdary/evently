@@ -20,6 +20,7 @@ import { ShareEventButton } from "@/components/share-event-button";
 import { WishlistEventButtonMock } from "@/components/events/wishlist-event-button-mock";
 import { EventCard } from "@/components/event-card";
 import { EventDetailBottomBar, buildPriceLabel } from "@/components/events/event-detail-bottom-bar";
+import { LocationMapPreview } from "@/components/location-map-preview";
 import { Button } from "@/components/ui/button";
 import { formatLongDateTime, formatEventDateRange } from "@/lib/format-date";
 import { getMockEventBySlug, getMockRelatedPublic } from "@/lib/mock-db/catalog";
@@ -250,18 +251,23 @@ export function EventMockDetailClient({
                 {detail.venue.postalCode ? ` ${detail.venue.postalCode}` : ""}
               </p>
 
-              <div className="relative mt-4 h-56 overflow-hidden rounded-2xl border border-zinc-200 bg-[radial-gradient(circle_at_30%_30%,#e5e7eb,transparent_60%),radial-gradient(circle_at_70%_70%,#f3f4f6,transparent_60%)] dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
-                  >
-                    Show map
-                  </a>
-                </div>
-              </div>
+              <LocationMapPreview
+                className="mt-4"
+                height="h-56"
+                query={`${detail.venue.name}, ${detail.venue.addressLine1}, ${city}${state ? `, ${state}` : ""}`}
+                latitude={detail.venue.latitude}
+                longitude={detail.venue.longitude}
+              />
+              <p className="mt-2">
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
+                >
+                  Open in Google Maps
+                </a>
+              </p>
 
               <p className="mt-6 text-sm font-semibold text-zinc-900 dark:text-zinc-50">How do you want to get there?</p>
               <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm text-zinc-700 dark:text-zinc-300">

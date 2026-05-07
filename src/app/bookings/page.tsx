@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { BookingsListClient } from "@/components/booking/bookings-list-client";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
@@ -120,7 +119,23 @@ export default async function BookingsPage() {
 
   const session = await auth();
   if (!session?.user?.id) {
-    redirect("/auth/signin?callbackUrl=/bookings");
+    return (
+      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10 sm:px-8">
+        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">My bookings</h1>
+            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+              Bookings stored locally on this device.
+            </p>
+          </div>
+          <Button variant="secondary" className="w-fit rounded-full" asChild>
+            <Link href="/events">Browse more events</Link>
+          </Button>
+        </div>
+
+        <BookingsListClient />
+      </main>
+    );
   }
 
   const bookings = await loadBookings(session.user.id);
@@ -166,6 +181,16 @@ export default async function BookingsPage() {
           description="Orders that were cancelled, refunded, or failed."
           rows={cancelled}
         />
+
+        <section>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">From this device</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              Demo bookings made with the organizer/event preview flow.
+            </p>
+          </div>
+          <BookingsListClient />
+        </section>
       </div>
     </main>
   );

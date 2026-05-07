@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { sendTicketConfirmationEmail } from "@/lib/email";
+import { log } from "@/lib/logger";
 
 function revalidatePathsForEvent(slug: string) {
   revalidatePath(`/events/${slug}`);
@@ -185,13 +186,27 @@ export async function claimTicket(
     const toEmail = attendee?.email || session.user.email;
     const toName = attendee?.name?.trim() || attendee?.email || "Guest";
     if (toEmail) {
-      sendTicketConfirmationEmail({
+      void sendTicketConfirmationEmail({
         toEmail,
         attendeeName: toName,
         eventTitle: event.title,
         ticketQuantity: quantity,
         ticketId: firstTicketId,
-      }).catch(console.error);
+      }).then((res) => {
+        if (!res.ok) {
+          log.error("ticket_email.failed", {
+            error: res.error,
+            ticketId: firstTicketId,
+            eventId: event.id,
+          });
+        } else {
+          log.info("ticket_email.sent", {
+            providerId: res.id,
+            ticketId: firstTicketId,
+            eventId: event.id,
+          });
+        }
+      });
     }
   }
 

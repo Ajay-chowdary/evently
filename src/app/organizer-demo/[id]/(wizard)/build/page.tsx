@@ -5,7 +5,8 @@ import { useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Plus, Upload } from "lucide-react";
 import { EventDatetimeFields } from "@/components/event-datetime-fields";
-import { LocationAutocompleteField } from "@/components/location-autocomplete-field";
+import { LocationAutocompleteField, type ResolvedLocation } from "@/components/location-autocomplete-field";
+import { LocationMapPreview } from "@/components/location-map-preview";
 import { WizardStepBar } from "@/components/organizer/wizard/wizard-step-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +14,10 @@ import { Label } from "@/components/ui/label";
 import { EVENT_COVER_PLACEHOLDER, isProbablyImageUrl } from "@/lib/cover-image";
 import { toDatetimeLocalValue } from "@/lib/datetime-local";
 import { useOrganizerMockStore } from "@/stores/organizer-mock-store";
-import { getSeedEvents } from "@/mock-data/seed";
-import type { FAQItem } from "@/types/domain";
+import { getSeedEvents, SEED_VENUES } from "@/mock-data/seed";
+import type { FAQItem, DomainEvent } from "@/types/domain";
+
+type ListingVenue = NonNullable<DomainEvent["listingVenue"]>;
 
 function toIso(v: string): string | null {
   if (!v.trim()) return null;
@@ -83,7 +86,36 @@ export default function OrganizerWizardBuildPage() {
   const [faqA, setFaqA] = useState("");
   const [agendaLabel, setAgendaLabel] = useState(base.agenda[0]?.label ?? "");
   const [agendaDesc, setAgendaDesc] = useState(base.agenda[0]?.description ?? "");
-  const [locationDisplay, setLocationDisplay] = useState("");
+
+  const seedVenue = useMemo(() => SEED_VENUES.find((v) => v.id === (event?.venueId ?? "")) ?? null, [event?.venueId]);
+  const initialListingVenue: ListingVenue | null = event?.listingVenue
+    ? { ...event.listingVenue }
+    : seedVenue
+      ? {
+          name: seedVenue.name,
+          addressLine1: seedVenue.addressLine1,
+          addressLine2: seedVenue.addressLine2,
+          city: seedVenue.city,
+          region: seedVenue.state ?? "",
+          country: seedVenue.country,
+          postalCode: seedVenue.postalCode,
+          latitude: seedVenue.latitude,
+          longitude: seedVenue.longitude,
+        }
+      : null;
+  const initialDisplay = (() => {
+    if (event?.listingVenue) {
+      return [event.listingVenue.name, event.listingVenue.addressLine1, event.listingVenue.city, event.listingVenue.region]
+        .filter(Boolean)
+        .join(", ");
+    }
+    if (seedVenue) {
+      return [seedVenue.name, seedVenue.city, seedVenue.state ?? ""].filter(Boolean).join(", ");
+    }
+    return "";
+  })();
+  const [listingVenue, setListingVenue] = useState<ListingVenue | null>(initialListingVenue);
+  const [locationDisplay, setLocationDisplay] = useState(initialDisplay);
 
   const previewMedia = useMemo(() => (isProbablyImageUrl(coverImage) ? coverImage : EVENT_COVER_PLACEHOLDER), [coverImage]);
   const hasCustomCover = coverImage.trim().length > 0 && coverImage !== EVENT_COVER_PLACEHOLDER;
@@ -133,6 +165,8 @@ export default function OrganizerWizardBuildPage() {
       dressCode: parkingInfo.trim() || null,
       ticketNote: mergedTicketNote || null,
       faqItems,
+      listingVenue,
+      listingCity: listingVenue?.city ?? event.listingCity ?? null,
       agenda: agendaLabel.trim()
         ? [
             {
@@ -148,6 +182,22 @@ export default function OrganizerWizardBuildPage() {
     });
 
     router.push(`/organizer-demo/${id}/tickets`);
+  };
+
+  const onLocationResolved = (next: ResolvedLocation) => {
+    const display = next.label?.trim() || [next.venueName, next.addressLine1, next.city, next.region].filter(Boolean).join(", ");
+    setLocationDisplay(display);
+    setListingVenue({
+      name: next.venueName || display,
+      addressLine1: next.addressLine1 ?? display,
+      addressLine2: null,
+      city: next.city || "",
+      region: next.region || "",
+      country: next.country || "US",
+      postalCode: next.postalCode ?? null,
+      latitude: typeof next.latitude === "number" ? next.latitude : null,
+      longitude: typeof next.longitude === "number" ? next.longitude : null,
+    });
   };
 
   return (
@@ -231,14 +281,21 @@ export default function OrganizerWizardBuildPage() {
             <LocationAutocompleteField
               label="Enter a location"
               defaultDisplay={locationDisplay}
-              onResolved={(next) => setLocationDisplay([next.venueName, next.city, next.region].filter(Boolean).join(", "))}
+              onResolved={onLocationResolved}
             />
             <button type="button" className="mt-3 text-xs font-medium text-blue-700 dark:text-blue-300" onClick={() => setShowMap((v) => !v)}>
               {showMap ? "Hide map" : "Show map"}
             </button>
           </div>
         </div>
-        {showMap ? <div className="mt-4 h-52 rounded-lg border border-zinc-200 bg-[radial-gradient(circle_at_20%_30%,#d8f5e6,transparent_35%),radial-gradient(circle_at_70%_40%,#d7f0ff,transparent_40%),#eef2f7] dark:border-zinc-700" /> : null}
+        {showMap ? (
+          <LocationMapPreview
+            className="mt-4"
+            query={locationDisplay}
+            latitude={listingVenue?.latitude}
+            longitude={listingVenue?.longitude}
+          />
+        ) : null}
       </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">

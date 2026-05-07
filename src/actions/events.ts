@@ -4,39 +4,44 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { auth } from "@/lib/auth";
+import { auth, ensureCallerIsOrganizer } from "@/lib/auth";
+import { ImageUploadError } from "@/lib/errors";
 import { prisma } from "@/lib/db";
 import { ensureUniqueEventSlug } from "@/lib/slug";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 async function uploadDataUrlToSupabase(dataUrl: string, prefix: string): Promise<string> {
-  if (!dataUrl.startsWith("data:image/")) return dataUrl; // Not a data URL, return as is
+  if (!dataUrl.startsWith("data:image/")) return dataUrl; // Already a remote URL, pass through.
 
-  const supabase = await createSupabaseServerClient();
-  
   const [header, base64Data] = dataUrl.split(",");
-  if (!base64Data) return dataUrl;
-  
+  if (!base64Data) {
+    throw new ImageUploadError("Image data is missing or malformed.");
+  }
+
   const mimeTypeMatch = header.match(/data:(.*?);/);
   const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : "image/jpeg";
-  const ext = mimeType.split("/")[1] || "jpg";
-  
+  const ext = (mimeType.split("/")[1] || "jpg").replace(/[^a-z0-9]/gi, "");
+
   const buffer = Buffer.from(base64Data, "base64");
   const fileName = `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${ext}`;
-  
-  const { data, error } = await supabase.storage
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.storage
     .from("event-posters")
     .upload(fileName, buffer, {
       contentType: mimeType,
       upsert: false,
     });
-    
+
   if (error) {
-    console.error("Supabase upload error:", error);
-    return dataUrl; // fallback to data url if upload fails
+    // Fail loudly: never write a base64 blob into Postgres.
+    throw new ImageUploadError(`Image upload failed: ${error.message}`);
   }
-  
+
   const { data: publicUrlData } = supabase.storage.from("event-posters").getPublicUrl(fileName);
+  if (!publicUrlData?.publicUrl) {
+    throw new ImageUploadError("Image uploaded but public URL was not available.");
+  }
   return publicUrlData.publicUrl;
 }
 
@@ -207,10 +212,13 @@ function parseForm(formData: FormData) {
 export type EventActionState = { error: string; fieldErrors?: Record<string, string[]> } | null;
 
 export async function createEvent(_prev: EventActionState, formData: FormData): Promise<EventActionState> {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const baseSession = await auth();
+  if (!baseSession?.user?.id) {
     return { error: "You must be signed in to create an event." };
   }
+  // Lazy organizer promotion: first time a user creates an event, we create
+  // their Organizer row + bump role. Avoids auto-promoting every signed-in user.
+  const session = await ensureCallerIsOrganizer();
 
   const raw = parseForm(formData);
   const parsed = eventFormSchema.safeParse(raw);
@@ -245,14 +253,23 @@ export async function createEvent(_prev: EventActionState, formData: FormData): 
 
   const mergedGalleryRaw = mergeGalleryUrls(normalized.imageUrl, normalized.galleryExtras);
 
-  // Upload any data URLs to Supabase Storage
-  const imageUrl = await uploadDataUrlToSupabase(normalized.imageUrl, "cover");
-  const organizerLogoUrl = normalized.organizerLogoUrl
-    ? await uploadDataUrlToSupabase(normalized.organizerLogoUrl, "logo")
-    : null;
-  const mergedGallery = await Promise.all(
-    mergedGalleryRaw.map((url, i) => uploadDataUrlToSupabase(url, `slide-${i}`))
-  );
+  let imageUrl: string;
+  let organizerLogoUrl: string | null;
+  let mergedGallery: string[];
+  try {
+    imageUrl = await uploadDataUrlToSupabase(normalized.imageUrl, "cover");
+    organizerLogoUrl = normalized.organizerLogoUrl
+      ? await uploadDataUrlToSupabase(normalized.organizerLogoUrl, "logo")
+      : null;
+    mergedGallery = await Promise.all(
+      mergedGalleryRaw.map((url, i) => uploadDataUrlToSupabase(url, `slide-${i}`)),
+    );
+  } catch (err) {
+    if (err instanceof ImageUploadError) {
+      return { error: err.message };
+    }
+    throw err;
+  }
 
   const slug = await ensureUniqueEventSlug(normalized.title);
 
@@ -343,14 +360,23 @@ export async function updateEvent(_prev: EventActionState, formData: FormData): 
 
   const mergedGalleryRaw = mergeGalleryUrls(normalized.imageUrl, normalized.galleryExtras);
 
-  // Upload any data URLs to Supabase Storage
-  const imageUrl = await uploadDataUrlToSupabase(normalized.imageUrl, "cover");
-  const organizerLogoUrl = normalized.organizerLogoUrl
-    ? await uploadDataUrlToSupabase(normalized.organizerLogoUrl, "logo")
-    : null;
-  const mergedGallery = await Promise.all(
-    mergedGalleryRaw.map((url, i) => uploadDataUrlToSupabase(url, `slide-${i}`))
-  );
+  let imageUrl: string;
+  let organizerLogoUrl: string | null;
+  let mergedGallery: string[];
+  try {
+    imageUrl = await uploadDataUrlToSupabase(normalized.imageUrl, "cover");
+    organizerLogoUrl = normalized.organizerLogoUrl
+      ? await uploadDataUrlToSupabase(normalized.organizerLogoUrl, "logo")
+      : null;
+    mergedGallery = await Promise.all(
+      mergedGalleryRaw.map((url, i) => uploadDataUrlToSupabase(url, `slide-${i}`)),
+    );
+  } catch (err) {
+    if (err instanceof ImageUploadError) {
+      return { error: err.message };
+    }
+    throw err;
+  }
 
   await prisma.event.update({
     where: { id },

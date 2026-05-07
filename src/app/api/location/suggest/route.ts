@@ -1,5 +1,7 @@
+import { NextResponse } from "next/server";
 import { getMockLocationSuggestions } from "@/lib/location/mock-location-provider";
 import type { LocationSuggestion } from "@/lib/location/types";
+import { clientIp, rateLimit } from "@/lib/ratelimit";
 
 type GooglePred = { description: string; place_id: string };
 type GoogleAutoResponse = { predictions?: GooglePred[]; status: string; error_message?: string };
@@ -45,7 +47,7 @@ async function googleAutocomplete(input: string, key: string): Promise<LocationS
 async function googlePlaceDetails(placeId: string, key: string): Promise<LocationSuggestion | null> {
   const params = new URLSearchParams({
     place_id: placeId,
-    fields: "name,formatted_address,address_component",
+    fields: "name,formatted_address,address_component,geometry/location",
     key,
   });
   const res = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?${params}`, {
@@ -57,14 +59,19 @@ async function googlePlaceDetails(placeId: string, key: string): Promise<Locatio
       name?: string;
       formatted_address?: string;
       address_components?: AddressComponent[];
+      geometry?: { location?: { lat?: number; lng?: number } };
     };
   };
   if (data.status !== "OK" || !data.result) return null;
   const comps = data.result.address_components ?? [];
   const city = pickComponent(comps, "locality", "postal_town", "sublocality", "neighborhood");
   const region = pickComponent(comps, "administrative_area_level_1");
+  const country = pickComponent(comps, "country");
+  const postalCode = pickComponent(comps, "postal_code");
   const street = streetLine(comps);
   const name = data.result.name?.trim() ?? "";
+  const lat = data.result.geometry?.location?.lat;
+  const lng = data.result.geometry?.location?.lng;
   return {
     id: placeId,
     label: data.result.formatted_address ?? name,
@@ -72,6 +79,10 @@ async function googlePlaceDetails(placeId: string, key: string): Promise<Locatio
     city: city || "",
     region,
     addressLine1: street || data.result.formatted_address || "",
+    postalCode: postalCode || undefined,
+    country: country || undefined,
+    latitude: typeof lat === "number" ? lat : undefined,
+    longitude: typeof lng === "number" ? lng : undefined,
     placeId,
   };
 }
@@ -83,6 +94,11 @@ function mapsKey() {
 }
 
 export async function GET(request: Request) {
+  const rl = await rateLimit("location-suggest").limit(`ip:${clientIp(request.headers)}`);
+  if (!rl.success) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
   const key = mapsKey();
   const placeId = searchParams.get("placeId");

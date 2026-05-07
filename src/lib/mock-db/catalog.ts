@@ -54,7 +54,7 @@ export function minPriceForEvent(eventId: string, extraAll: TicketType[] = []): 
 
 export function domainEventToPublicListItem(ev: DomainEvent, extraAll: TicketType[] = []): PublicEventListItem {
   const venue = venueMap.get(ev.venueId);
-  const listCity = ev.listingCity?.trim() || venue?.city || "TBA";
+  const listCity = ev.listingVenue?.city?.trim() || ev.listingCity?.trim() || venue?.city || "TBA";
   const { min, currency } = minPriceForEvent(ev.id, extraAll);
   return {
     id: ev.id,
@@ -77,7 +77,7 @@ function relevanceScore(ev: DomainEvent, q: string): number {
   if (ev.title.toLowerCase().includes(t)) s += 20;
   if (hay.includes(t)) s += 10;
   if (ev.category.toLowerCase().includes(t)) s += 4;
-  const listCity = ev.listingCity?.trim() || venueMap.get(ev.venueId)?.city;
+  const listCity = ev.listingVenue?.city?.trim() || ev.listingCity?.trim() || venueMap.get(ev.venueId)?.city;
   if (listCity?.toLowerCase().includes(t)) s += 6;
   return s;
 }
@@ -101,7 +101,7 @@ export function searchMockEvents(
 
   if (city && city !== "all") {
     list = list.filter((ev) => {
-      const c = ev.listingCity?.trim() || venueMap.get(ev.venueId)?.city;
+      const c = ev.listingVenue?.city?.trim() || ev.listingCity?.trim() || venueMap.get(ev.venueId)?.city;
       return c === city;
     });
   }
@@ -114,7 +114,7 @@ export function searchMockEvents(
   if (q?.trim()) {
     const term = q.trim().toLowerCase();
     list = list.filter((ev) => {
-      const listCity = ev.listingCity?.trim() || venueMap.get(ev.venueId)?.city;
+      const listCity = ev.listingVenue?.city?.trim() || ev.listingCity?.trim() || venueMap.get(ev.venueId)?.city;
       return (
         ev.title.toLowerCase().includes(term) ||
         ev.description.toLowerCase().includes(term) ||
@@ -177,9 +177,27 @@ export function getMockEventBySlug(
   if (!ev) return null;
   if (!options?.includeDraft && ev.status === "draft") return null;
   if (ev.visibility === "private") return null;
-  const venue = venueMap.get(ev.venueId);
+  const seedVenue = venueMap.get(ev.venueId);
   const baseOrganizer = organizerMap.get(ev.organizerId);
-  if (!venue || !baseOrganizer) return null;
+  if (!baseOrganizer) return null;
+  const lv = ev.listingVenue;
+  const venue = lv
+    ? {
+        id: ev.venueId || `listing-${ev.id}`,
+        name: lv.name?.trim() || seedVenue?.name || "TBA",
+        addressLine1: lv.addressLine1 || seedVenue?.addressLine1 || "",
+        addressLine2: lv.addressLine2 ?? seedVenue?.addressLine2 ?? null,
+        city: lv.city || ev.listingCity || seedVenue?.city || "TBA",
+        state: lv.region || seedVenue?.state || null,
+        country: lv.country || seedVenue?.country || "US",
+        postalCode: lv.postalCode ?? seedVenue?.postalCode ?? null,
+        latitude: lv.latitude ?? seedVenue?.latitude ?? null,
+        longitude: lv.longitude ?? seedVenue?.longitude ?? null,
+        capacity: seedVenue?.capacity ?? null,
+        accessibilityInfo: seedVenue?.accessibilityInfo ?? null,
+      }
+    : seedVenue;
+  if (!venue) return null;
   const customName = ev.customOrganizerName?.trim();
   const organizer = customName ? { ...baseOrganizer, name: customName } : baseOrganizer;
   const ticketTypes = mergedTicketTypesForEvent(ev.id, extraTicketTypes);
@@ -225,7 +243,7 @@ export function getMockDistinctCities(extraEvents: DomainEvent[] = []): string[]
   const cities = new Set<string>();
   for (const ev of all) {
     if (!isDiscoverable(ev)) continue;
-    const label = ev.listingCity?.trim() || venueMap.get(ev.venueId)?.city;
+    const label = ev.listingVenue?.city?.trim() || ev.listingCity?.trim() || venueMap.get(ev.venueId)?.city;
     if (label) cities.add(label);
   }
   return Array.from(cities).sort();

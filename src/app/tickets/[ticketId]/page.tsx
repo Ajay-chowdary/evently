@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
 import Image from "next/image";
+import { notFound, redirect } from "next/navigation";
 import { TicketPassClient } from "@/components/booking/ticket-pass-client";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
@@ -30,7 +30,7 @@ export default async function TicketPassPage({ params }: Props) {
 
   const session = await auth();
   if (!session?.user?.id) {
-    redirect("/auth/signin?callbackUrl=/account/tickets");
+    redirect(`/auth/signin?callbackUrl=/tickets/${ticketId}`);
   }
 
   const ticket = await prisma.ticket.findFirst({

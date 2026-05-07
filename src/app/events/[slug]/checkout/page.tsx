@@ -31,6 +31,11 @@ export default async function CheckoutPage({ params, searchParams }: Props) {
     );
   }
 
+  const event = await getEventBySlug(slug);
+  if (!event || !event.published) {
+    redirect(`/events/${slug}`);
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     const callback = new URLSearchParams({
@@ -38,11 +43,6 @@ export default async function CheckoutPage({ params, searchParams }: Props) {
       ...(ticketType ? { ticketType } : {}),
     });
     redirect(`/auth/signin?callbackUrl=${encodeURIComponent(`/events/${slug}/checkout?${callback.toString()}`)}`);
-  }
-
-  const event = await getEventBySlug(slug);
-  if (!event || !event.published) {
-    redirect(`/events/${slug}`);
   }
 
   const now = new Date();

@@ -14,6 +14,8 @@ const HOME_FOR_MODE: Record<UserRoleMode, string> = {
 export function useHydratedRoleMode(): UserRoleMode {
   const mode = useUserRoleStore((s) => s.mode);
   const [mounted, setMounted] = useState(false);
+  // SSR-safe hydration guard: flips exactly once on mount, no cascade risk.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
   return mounted ? mode : "attending";
 }

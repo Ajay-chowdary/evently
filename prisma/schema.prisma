@@ -276,6 +276,8 @@ model Booking {
   @@index([userId, createdAt])
   @@index([eventId, createdAt])
   @@index([status, createdAt])
+  // Used by the PENDING_PAYMENT sweeper to find expired Stripe sessions.
+  @@index([status, checkoutExpiresAt])
 }
 
 model BookingLineItem {

@@ -43,6 +43,8 @@ export default function OrganizerWizardLayout({ children }: { children: React.Re
   const publishedEvents = useOrganizerMockStore((s) => s.publishedEvents);
   const setEventStatus = useOrganizerMockStore((s) => s.setEventStatus);
   const [mounted, setMounted] = useState(false);
+  // SSR-safe hydration guard: flips exactly once on mount, no cascade risk.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   const event = useMemo(() => {

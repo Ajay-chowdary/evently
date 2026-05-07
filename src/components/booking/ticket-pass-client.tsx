@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
 import { useBookingStore } from "@/stores/booking-store";
 
@@ -11,6 +13,27 @@ export function TicketPassClient({ ticketId }: { ticketId: string }) {
 
   const ticket = getTicketById(ticketId);
   const booking = ticket ? getBooking(ticket.bookingId) : undefined;
+
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!ticket) return;
+    let active = true;
+    QRCode.toDataURL(ticket.qrCodeValue, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 256,
+      color: { dark: "#111827", light: "#ffffff" },
+    })
+      .then((url) => {
+        if (active) setQrDataUrl(url);
+      })
+      .catch(() => {
+        if (active) setQrDataUrl(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [ticket]);
 
   const statusLine = useMemo(() => {
     if (!ticket) return null;
@@ -39,12 +62,19 @@ export function TicketPassClient({ ticketId }: { ticketId: string }) {
         <p className="text-sm text-zinc-600 dark:text-zinc-400">Ref {booking.referenceCode}</p>
       </div>
       <div className="flex flex-col items-center px-6 py-10">
-        <div
-          className="flex size-44 items-center justify-center rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-50 text-center text-xs text-zinc-500 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-400"
-          aria-label="QR code placeholder"
-        >
-          QR placeholder
-          <span className="sr-only">Value {ticket.qrCodeValue}</span>
+        <div className="flex size-60 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700">
+          {qrDataUrl ? (
+            <Image
+              src={qrDataUrl}
+              alt={`QR code for ticket ${ticket.qrCodeValue}`}
+              width={256}
+              height={256}
+              className="h-full w-full"
+              unoptimized
+            />
+          ) : (
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">Generating QR…</span>
+          )}
         </div>
         <p className="mt-4 font-mono text-sm text-zinc-700 dark:text-zinc-300">{ticket.qrCodeValue}</p>
         <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">

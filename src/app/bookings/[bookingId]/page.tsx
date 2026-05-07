@@ -29,7 +29,7 @@ export default async function BookingDetailPage({ params }: Props) {
 
   const session = await auth();
   if (!session?.user?.id) {
-    redirect("/auth/signin?callbackUrl=/bookings");
+    redirect(`/auth/signin?callbackUrl=/bookings/${bookingId}`);
   }
 
   const booking = await prisma.booking.findFirst({

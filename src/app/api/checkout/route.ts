@@ -4,6 +4,7 @@ import { computeTotals } from "@/lib/booking-engine";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { env, hasStripeEnv } from "@/lib/env";
+import { clientIp, rateLimit } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,14 @@ export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  }
+
+  const rl = await rateLimit("checkout").limit(`user:${session.user.id}:${clientIp(request.headers)}`);
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: "Too many checkout attempts. Try again in a minute." },
+      { status: 429 },
+    );
   }
 
   const body = (await request.json().catch(() => null)) as
